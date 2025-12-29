@@ -24,10 +24,12 @@ import ParentDashboard from "./pages/parent/ParentDashboard";
 
 // Admin Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import UserManagementPage from "./pages/admin/UserManagementPage";
 
 // Shared Pages
 import AnnouncementsPage from "./pages/shared/AnnouncementsPage";
 import MessagesPage from "./pages/shared/MessagesPage";
+import DocumentsPage from "./pages/shared/DocumentsPage";
 
 import NotFound from "./pages/NotFound";
 
@@ -68,20 +70,20 @@ const AppRoutes = () => {
       <Route path="/teacher/wellbeing" element={<ProtectedRoute allowedRoles={['teacher']}><WellbeingReportsPage /></ProtectedRoute>} />
       <Route path="/teacher/announcements" element={<ProtectedRoute allowedRoles={['teacher']}><AnnouncementsPage /></ProtectedRoute>} />
       <Route path="/teacher/messages" element={<ProtectedRoute allowedRoles={['teacher']}><MessagesPage /></ProtectedRoute>} />
-      <Route path="/teacher/documents" element={<ProtectedRoute allowedRoles={['teacher']}><AnnouncementsPage /></ProtectedRoute>} />
+      <Route path="/teacher/documents" element={<ProtectedRoute allowedRoles={['teacher']}><DocumentsPage /></ProtectedRoute>} />
 
       {/* Parent Routes */}
       <Route path="/parent" element={<ProtectedRoute allowedRoles={['parent']}><ParentDashboard /></ProtectedRoute>} />
       <Route path="/parent/activities" element={<ProtectedRoute allowedRoles={['parent']}><ActivityLogsPage /></ProtectedRoute>} />
       <Route path="/parent/meals" element={<ProtectedRoute allowedRoles={['parent']}><MealTrackingPage /></ProtectedRoute>} />
       <Route path="/parent/wellbeing" element={<ProtectedRoute allowedRoles={['parent']}><WellbeingReportsPage /></ProtectedRoute>} />
-      <Route path="/parent/documents" element={<ProtectedRoute allowedRoles={['parent']}><AnnouncementsPage /></ProtectedRoute>} />
+      <Route path="/parent/documents" element={<ProtectedRoute allowedRoles={['parent']}><DocumentsPage /></ProtectedRoute>} />
       <Route path="/parent/messages" element={<ProtectedRoute allowedRoles={['parent']}><MessagesPage /></ProtectedRoute>} />
       <Route path="/parent/announcements" element={<ProtectedRoute allowedRoles={['parent']}><AnnouncementsPage /></ProtectedRoute>} />
 
       {/* Admin Routes */}
       <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
-      <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
+      <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><UserManagementPage /></ProtectedRoute>} />
       <Route path="/admin/classrooms" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
       <Route path="/admin/students" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
       <Route path="/admin/parents" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
