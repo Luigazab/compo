@@ -25,6 +25,9 @@ import ParentDashboard from "./pages/parent/ParentDashboard";
 // Admin Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import UserManagementPage from "./pages/admin/UserManagementPage";
+import ClassroomManagementPage from "./pages/admin/ClassroomManagementPage";
+import StudentManagementPage from "./pages/admin/StudentManagementPage";
+import ReportsAnalyticsPage from "./pages/admin/ReportsAnalyticsPage";
 
 // Shared Pages
 import AnnouncementsPage from "./pages/shared/AnnouncementsPage";
@@ -84,10 +87,10 @@ const AppRoutes = () => {
       {/* Admin Routes */}
       <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
       <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><UserManagementPage /></ProtectedRoute>} />
-      <Route path="/admin/classrooms" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
-      <Route path="/admin/students" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
+      <Route path="/admin/classrooms" element={<ProtectedRoute allowedRoles={['admin']}><ClassroomManagementPage /></ProtectedRoute>} />
+      <Route path="/admin/students" element={<ProtectedRoute allowedRoles={['admin']}><StudentManagementPage /></ProtectedRoute>} />
       <Route path="/admin/parents" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
-      <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
+      <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']}><ReportsAnalyticsPage /></ProtectedRoute>} />
       <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
 
       {/* Root redirect */}
