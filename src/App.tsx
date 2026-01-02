@@ -21,6 +21,13 @@ import WellbeingReportsPage from "./pages/teacher/WellbeingReportsPage";
 
 // Parent Pages
 import ParentDashboard from "./pages/parent/ParentDashboard";
+import ActivityFeedPage from "./pages/parent/ActivityFeedPage";
+import ChildProfilePage from "./pages/parent/ChildProfilePage";
+import ParentWellbeingReportsPage from "./pages/parent/WellbeingReportsPage";
+import MealHistoryPage from "./pages/parent/MealHistoryPage";
+import DocumentsPortalPage from "./pages/parent/DocumentsPortalPage";
+import ParentMessagesPage from "./pages/parent/ParentMessagesPage";
+import ParentAnnouncementsPage from "./pages/parent/ParentAnnouncementsPage";
 
 // Admin Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -79,12 +86,13 @@ const AppRoutes = () => {
 
       {/* Parent Routes */}
       <Route path="/parent" element={<ProtectedRoute allowedRoles={['parent']}><ParentDashboard /></ProtectedRoute>} />
-      <Route path="/parent/activities" element={<ProtectedRoute allowedRoles={['parent']}><ActivityLogsPage /></ProtectedRoute>} />
-      <Route path="/parent/meals" element={<ProtectedRoute allowedRoles={['parent']}><MealTrackingPage /></ProtectedRoute>} />
-      <Route path="/parent/wellbeing" element={<ProtectedRoute allowedRoles={['parent']}><WellbeingReportsPage /></ProtectedRoute>} />
-      <Route path="/parent/documents" element={<ProtectedRoute allowedRoles={['parent']}><DocumentsPage /></ProtectedRoute>} />
-      <Route path="/parent/messages" element={<ProtectedRoute allowedRoles={['parent']}><MessagesPage /></ProtectedRoute>} />
-      <Route path="/parent/announcements" element={<ProtectedRoute allowedRoles={['parent']}><AnnouncementsPage /></ProtectedRoute>} />
+      <Route path="/parent/activities" element={<ProtectedRoute allowedRoles={['parent']}><ActivityFeedPage /></ProtectedRoute>} />
+      <Route path="/parent/child/:childId" element={<ProtectedRoute allowedRoles={['parent']}><ChildProfilePage /></ProtectedRoute>} />
+      <Route path="/parent/meals" element={<ProtectedRoute allowedRoles={['parent']}><MealHistoryPage /></ProtectedRoute>} />
+      <Route path="/parent/wellbeing" element={<ProtectedRoute allowedRoles={['parent']}><ParentWellbeingReportsPage /></ProtectedRoute>} />
+      <Route path="/parent/documents" element={<ProtectedRoute allowedRoles={['parent']}><DocumentsPortalPage /></ProtectedRoute>} />
+      <Route path="/parent/messages" element={<ProtectedRoute allowedRoles={['parent']}><ParentMessagesPage /></ProtectedRoute>} />
+      <Route path="/parent/announcements" element={<ProtectedRoute allowedRoles={['parent']}><ParentAnnouncementsPage /></ProtectedRoute>} />
 
       {/* Admin Routes */}
       <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
