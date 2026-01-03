@@ -26,8 +26,10 @@ import {
   FileText,
   Filter,
   AlertTriangle,
-  File
+  File,
+  Image as ImageIcon
 } from 'lucide-react';
+import { DocumentUpload } from '@/components/ui/photo-upload';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -321,29 +323,11 @@ const DocumentsPortalPage: React.FC = () => {
                 </p>
               </div>
             )}
-            <div className="border-2 border-dashed border-border rounded-xl p-8 text-center">
-              <Input
-                type="file"
-                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                className="hidden"
-                id="file-upload"
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-              />
-              <label htmlFor="file-upload" className="cursor-pointer">
-                <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-sm text-muted-foreground mb-2">
-                  Click to upload or drag and drop
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  PDF, JPG, PNG, DOC up to 10MB
-                </p>
-              </label>
-              {uploadFile && (
-                <div className="mt-4 p-2 bg-primary/10 rounded-lg">
-                  <p className="text-sm font-medium">{uploadFile.name}</p>
-                </div>
-              )}
-            </div>
+            <DocumentUpload
+              file={uploadFile}
+              onFileChange={(file) => setUploadFile(file)}
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUploadDialogOpen(false)}>Cancel</Button>

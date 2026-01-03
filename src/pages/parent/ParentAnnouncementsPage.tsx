@@ -239,18 +239,19 @@ const ParentAnnouncementsPage: React.FC = () => {
           </div>
         </div>
       ) : (
-        /* Calendar View */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        /* Calendar View - Responsive Layout */
+        <div className="space-y-6">
+          {/* Calendar - Full width on mobile, side panel on desktop */}
           <Card className="shadow-card">
             <CardHeader>
               <CardTitle className="text-lg">Events Calendar</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex justify-center">
               <Calendar
                 mode="single"
                 selected={selectedDate}
                 onSelect={setSelectedDate}
-                className="rounded-md border pointer-events-auto"
+                className="rounded-md border pointer-events-auto w-full max-w-[350px]"
                 modifiers={{
                   hasEvent: eventsWithDates.map(e => parseISO(e.eventDate!))
                 }}
@@ -262,19 +263,22 @@ const ParentAnnouncementsPage: React.FC = () => {
                   }
                 }}
               />
-              {selectedDate && (
+            </CardContent>
+            {selectedDate && (
+              <div className="px-6 pb-4">
                 <Button 
                   variant="ghost" 
-                  className="w-full mt-4"
+                  className="w-full"
                   onClick={() => setSelectedDate(undefined)}
                 >
                   Clear selection
                 </Button>
-              )}
-            </CardContent>
+              </div>
+            )}
           </Card>
 
-          <Card className="shadow-card lg:col-span-2">
+          {/* Events List */}
+          <Card className="shadow-card">
             <CardHeader>
               <CardTitle className="text-lg">
                 {selectedDate 
@@ -289,7 +293,7 @@ const ParentAnnouncementsPage: React.FC = () => {
                 .sort((a, b) => new Date(a.eventDate!).getTime() - new Date(b.eventDate!).getTime())
                 .map(ann => (
                   <div key={ann.id} className="p-4 bg-muted rounded-xl mb-4 last:mb-0">
-                    <div className="flex items-start justify-between mb-2">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-2">
                       <div>
                         <div className="flex items-center gap-2">
                           <PartyPopper className="h-4 w-4 text-primary" />
@@ -303,7 +307,7 @@ const ParentAnnouncementsPage: React.FC = () => {
                         variant="outline" 
                         size="sm"
                         onClick={() => handleExportEvent(ann)}
-                        className="gap-2"
+                        className="gap-2 w-full sm:w-auto"
                       >
                         <Download className="h-4 w-4" />
                         Add to Calendar

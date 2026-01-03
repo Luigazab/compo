@@ -20,7 +20,6 @@ import {
   Plus,
   Calendar,
   Clock,
-  Camera,
   Save,
   Send,
   Smile,
@@ -30,6 +29,7 @@ import {
   Heart,
   Moon,
 } from 'lucide-react';
+import { PhotoUpload } from '@/components/ui/photo-upload';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -270,15 +270,11 @@ const ActivityLogsPage: React.FC = () => {
                 {/* Photo Upload */}
                 <div className="space-y-2">
                   <Label>Photos</Label>
-                  <div className="border-2 border-dashed border-border rounded-xl p-8 text-center">
-                    <Camera className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      Drag & drop photos or click to upload
-                    </p>
-                    <Button variant="secondary" size="sm" className="mt-3">
-                      Choose Files
-                    </Button>
-                  </div>
+                  <PhotoUpload
+                    maxFiles={5}
+                    maxSizeMB={10}
+                    onPhotosChange={(files) => console.log('Photos:', files)}
+                  />
                 </div>
 
                 {/* Actions */}
