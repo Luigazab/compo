@@ -125,7 +125,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
             <button className="p-1">
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                  {user ? getInitials(user.name) : 'U'}
+                  {user ? getInitials(user.full_name) : 'U'}
                 </AvatarFallback>
               </Avatar>
             </button>
@@ -133,7 +133,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">{user?.name}</p>
+                <p className="text-sm font-medium">{user?.full_name}</p>
                 <p className="text-xs text-muted-foreground">{user?.email}</p>
               </div>
             </DropdownMenuLabel>
@@ -206,11 +206,11 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
             <div className="flex items-center gap-3 p-2">
               <Avatar className="h-10 w-10">
                 <AvatarFallback className="bg-primary text-primary-foreground">
-                  {user ? getInitials(user.name) : 'U'}
+                  {user ? getInitials(user.full_name) : 'U'}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">{user?.name}</p>
+                <p className="text-sm font-semibold truncate">{user?.full_name}</p>
                 <span className={cn('status-badge text-xs', getRoleBadgeClass())}>
                   {role?.charAt(0).toUpperCase()}{role?.slice(1)}
                 </span>

@@ -25,7 +25,7 @@ const ParentDashboard: React.FC = () => {
   return (
     <DashboardLayout>
       <PageHeader
-        title={`Hello, ${user?.name?.split(' ')[0]}! 👋`}
+        title={`Hello, ${user?.full_name?.split(' ')[0]}! 👋`}
         description="Here's what's happening with your little ones today"
       />
 

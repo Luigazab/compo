@@ -7,13 +7,12 @@ import { AnnouncementCard } from '@/components/ui/announcement-card';
 import { ChildCard } from '@/components/ui/child-card';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  mockChildren,
-  mockAnnouncements,
-  mockClassrooms,
-  mockActivityLogs,
-} from '@/lib/mockData';
+import { useTeacherClassroom } from '@/hooks/useClassrooms';
+import { useChildren } from '@/hooks/useChildren';
+import { useActivityLogs } from '@/hooks/useActivityLogs';
+import { useAnnouncements } from '@/hooks/useAnnouncements';
 import {
   Users,
   UserCheck,
@@ -21,7 +20,6 @@ import {
   ClipboardList,
   MessageSquare,
   Bell,
-  Plus,
   ChevronRight,
   Calendar,
 } from 'lucide-react';
@@ -30,33 +28,35 @@ const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
   
   // Get teacher's classroom
-  const teacherClassroom = mockClassrooms.find(c => c.teacherId === 'teacher-1');
-  const classroomChildren = mockChildren.filter(c => c.classroomId === teacherClassroom?.id);
+  const { data: teacherClassroom, isLoading: classroomLoading } = useTeacherClassroom(user?.id);
+  const { data: classroomChildren = [], isLoading: childrenLoading } = useChildren(teacherClassroom?.id);
   
-  // Today's stats
+  // Get today's activity logs
+  const today = new Date().toISOString().split('T')[0];
+  const { data: todaysLogs = [] } = useActivityLogs(undefined, today);
+  
+  // Get announcements
+  const { data: announcements = [] } = useAnnouncements(teacherClassroom?.id);
+  const recentAnnouncements = announcements.slice(0, 2);
+  
+  // Calculate stats
   const totalStudents = classroomChildren.length;
-  const presentStudents = 6; // Mock data
-  const absentStudents = totalStudents - presentStudents;
-  
-  // Activity log status
-  const todaysLogs = mockActivityLogs.filter(
-    log => log.date === '2024-12-28' && log.status === 'published'
+  const loggedToday = todaysLogs.filter(log => 
+    classroomChildren.some(child => child.id === log.child_id)
   );
   
-  // Recent announcements
-  const recentAnnouncements = mockAnnouncements.slice(0, 2);
-  
-  // Quick actions
   const quickActions = [
     { label: 'Log Activity', href: '/teacher/activity-logs', icon: ClipboardList, color: 'bg-primary' },
     { label: 'Send Message', href: '/teacher/messages', icon: MessageSquare, color: 'bg-accent' },
     { label: 'Announcement', href: '/teacher/announcements', icon: Bell, color: 'bg-success' },
   ];
 
+  const isLoading = classroomLoading || childrenLoading;
+
   return (
     <DashboardLayout>
       <PageHeader
-        title={`Good morning, ${user?.name?.split(' ')[0]}! 👋`}
+        title={`Good morning, ${user?.full_name?.split(' ')[0]}! 👋`}
         description="Here's what's happening in your classroom today"
       />
 
@@ -64,28 +64,28 @@ const TeacherDashboard: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard
           title="Total Students"
-          value={totalStudents}
-          subtitle={teacherClassroom?.name}
+          value={isLoading ? '-' : totalStudents}
+          subtitle={teacherClassroom?.name || 'No classroom'}
           icon={Users}
           variant="primary"
         />
         <StatCard
           title="Present Today"
-          value={presentStudents}
+          value={isLoading ? '-' : totalStudents}
           subtitle="Checked in"
           icon={UserCheck}
           variant="success"
         />
         <StatCard
           title="Absent"
-          value={absentStudents}
+          value={0}
           subtitle="Not checked in"
           icon={UserX}
           variant="warning"
         />
         <StatCard
           title="Activities Logged"
-          value={`${todaysLogs.length}/${totalStudents}`}
+          value={`${loggedToday.length}/${totalStudents}`}
           subtitle="Today's logs"
           icon={ClipboardList}
         />
@@ -120,17 +120,36 @@ const TeacherDashboard: React.FC = () => {
             </Link>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {classroomChildren.slice(0, 4).map(child => (
-                <ChildCard
-                  key={child.id}
-                  child={child}
-                  showLogStatus
-                  logStatus={todaysLogs.find(l => l.childId === child.id) ? 'completed' : 'pending'}
-                  linkTo={`/teacher/students/${child.id}`}
-                />
-              ))}
-            </div>
+            {isLoading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {[1, 2, 3, 4].map(i => (
+                  <Skeleton key={i} className="h-32 rounded-xl" />
+                ))}
+              </div>
+            ) : classroomChildren.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">No students in your classroom yet.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {classroomChildren.slice(0, 4).map(child => (
+                  <ChildCard
+                    key={child.id}
+                    child={{
+                      id: child.id,
+                      name: `${child.first_name} ${child.last_name}`,
+                      age: Math.floor((Date.now() - new Date(child.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)),
+                      dateOfBirth: child.date_of_birth,
+                      classroomId: child.classroom_id || '',
+                      parentIds: [],
+                      allergies: child.allergies ? child.allergies.split(',').map(a => a.trim()) : [],
+                      emergencyContact: { name: '', phone: '', relationship: '' },
+                    }}
+                    showLogStatus
+                    logStatus={loggedToday.find(l => l.child_id === child.id) ? 'completed' : 'pending'}
+                    linkTo={`/teacher/students/${child.id}`}
+                  />
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -144,26 +163,28 @@ const TeacherDashboard: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center gap-3 p-3 bg-warning-light rounded-xl">
-                <div className="w-12 h-12 rounded-lg bg-warning flex flex-col items-center justify-center text-warning-foreground">
-                  <span className="text-xs font-medium">DEC</span>
-                  <span className="text-lg font-bold">29</span>
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Pajama Day</p>
-                  <p className="text-xs text-muted-foreground">Special activity day</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-info-light rounded-xl">
-                <div className="w-12 h-12 rounded-lg bg-info flex flex-col items-center justify-center text-info-foreground">
-                  <span className="text-xs font-medium">JAN</span>
-                  <span className="text-lg font-bold">10</span>
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Photo Day</p>
-                  <p className="text-xs text-muted-foreground">Class photos</p>
-                </div>
-              </div>
+              {announcements
+                .filter(a => a.event_date)
+                .slice(0, 2)
+                .map(event => (
+                  <div key={event.id} className="flex items-center gap-3 p-3 bg-info-light rounded-xl">
+                    <div className="w-12 h-12 rounded-lg bg-info flex flex-col items-center justify-center text-info-foreground">
+                      <span className="text-xs font-medium">
+                        {new Date(event.event_date!).toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}
+                      </span>
+                      <span className="text-lg font-bold">
+                        {new Date(event.event_date!).getDate()}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">{event.title}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-1">{event.content}</p>
+                    </div>
+                  </div>
+                ))}
+              {announcements.filter(a => a.event_date).length === 0 && (
+                <p className="text-muted-foreground text-center py-4">No upcoming events</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -182,9 +203,24 @@ const TeacherDashboard: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {recentAnnouncements.map(announcement => (
-              <AnnouncementCard key={announcement.id} announcement={announcement} />
-            ))}
+            {recentAnnouncements.length > 0 ? (
+              recentAnnouncements.map(announcement => (
+                <AnnouncementCard key={announcement.id} announcement={{
+                  id: announcement.id,
+                  title: announcement.title,
+                  content: announcement.content,
+                  authorId: announcement.created_by,
+                  targetAudience: 'everyone',
+                  priority: (announcement.priority as 'low' | 'normal' | 'high') || 'normal',
+                  isPinned: announcement.is_pinned || false,
+                  createdAt: announcement.created_at || '',
+                  readBy: [],
+                  eventDate: announcement.event_date || undefined,
+                }} />
+              ))
+            ) : (
+              <p className="text-muted-foreground text-center py-4">No announcements yet</p>
+            )}
           </div>
         </CardContent>
       </Card>
