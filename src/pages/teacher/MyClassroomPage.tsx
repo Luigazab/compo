@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { ChildCard } from '@/components/ui/child-card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -13,27 +13,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { mockChildren, mockClassrooms, mockActivityLogs } from '@/lib/mockData';
+import { useAuth } from '@/contexts/AuthContext';
+import { useTeacherClassroom } from '@/hooks/useClassrooms';
+import { useChildren } from '@/hooks/useChildren';
+import { useActivityLogs } from '@/hooks/useActivityLogs';
 import { Search, Filter, Users } from 'lucide-react';
 
 const MyClassroomPage: React.FC = () => {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   
-  // Get teacher's classroom (mock: using first classroom)
-  const teacherClassroom = mockClassrooms[0];
-  const classroomChildren = mockChildren.filter(c => c.classroomId === teacherClassroom?.id);
+  // Get teacher's classroom
+  const { data: teacherClassroom, isLoading: classroomLoading } = useTeacherClassroom(user?.id);
+  const { data: classroomChildren = [], isLoading: childrenLoading } = useChildren(teacherClassroom?.id);
   
   // Get today's logs
-  const todaysLogs = mockActivityLogs.filter(log => log.date === '2024-12-28');
+  const today = new Date().toISOString().split('T')[0];
+  const { data: todaysLogs = [] } = useActivityLogs(undefined, today);
   
   // Filter children
   const filteredChildren = classroomChildren.filter(child => {
-    const matchesSearch = child.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const fullName = `${child.first_name} ${child.last_name}`.toLowerCase();
+    const matchesSearch = fullName.includes(searchQuery.toLowerCase());
     
     if (statusFilter === 'all') return matchesSearch;
     
-    const hasLog = todaysLogs.some(log => log.childId === child.id && log.status === 'published');
+    const hasLog = todaysLogs.some(log => log.child_id === child.id);
     
     if (statusFilter === 'logged') return matchesSearch && hasLog;
     if (statusFilter === 'pending') return matchesSearch && !hasLog;
@@ -41,11 +47,13 @@ const MyClassroomPage: React.FC = () => {
     return matchesSearch;
   });
 
+  const isLoading = classroomLoading || childrenLoading;
+
   return (
     <DashboardLayout>
       <PageHeader
         title="My Classroom"
-        description={`${teacherClassroom?.name} • ${teacherClassroom?.ageGroup}`}
+        description={teacherClassroom ? `${teacherClassroom.name} • ${teacherClassroom.age_group || 'All ages'}` : 'Loading...'}
         actions={
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="gap-1">
@@ -83,24 +91,39 @@ const MyClassroomPage: React.FC = () => {
       </div>
 
       {/* Students Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-        {filteredChildren.map(child => {
-          const hasLog = todaysLogs.some(
-            log => log.childId === child.id && log.status === 'published'
-          );
-          return (
-            <ChildCard
-              key={child.id}
-              child={child}
-              showLogStatus
-              logStatus={hasLog ? 'completed' : 'pending'}
-              linkTo={`/teacher/students/${child.id}`}
-            />
-          );
-        })}
-      </div>
+      {isLoading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+            <Skeleton key={i} className="h-40 rounded-xl" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {filteredChildren.map(child => {
+            const hasLog = todaysLogs.some(log => log.child_id === child.id);
+            return (
+              <ChildCard
+                key={child.id}
+                child={{
+                  id: child.id,
+                  name: `${child.first_name} ${child.last_name}`,
+                  age: Math.floor((Date.now() - new Date(child.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)),
+                  dateOfBirth: child.date_of_birth,
+                  classroomId: child.classroom_id || '',
+                  parentIds: [],
+                  allergies: child.allergies ? child.allergies.split(',').map(a => a.trim()) : [],
+                  emergencyContact: { name: '', phone: '', relationship: '' },
+                }}
+                showLogStatus
+                logStatus={hasLog ? 'completed' : 'pending'}
+                linkTo={`/teacher/students/${child.id}`}
+              />
+            );
+          })}
+        </div>
+      )}
 
-      {filteredChildren.length === 0 && (
+      {!isLoading && filteredChildren.length === 0 && (
         <div className="text-center py-12">
           <p className="text-muted-foreground">No students found matching your criteria.</p>
         </div>
