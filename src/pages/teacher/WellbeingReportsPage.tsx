@@ -15,13 +15,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  mockChildren,
-  mockClassrooms,
-  mockWellbeingReports,
-  getChildById,
-  getUserById,
-} from '@/lib/mockData';
+import { useChildren } from '@/hooks/useChildren';
+import { useWellbeingReports, useCreateWellbeingReport } from '@/hooks/useWellbeingReports';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus,
   AlertTriangle,
@@ -31,8 +27,9 @@ import {
   Camera,
   Send,
   Bell,
+  Loader2,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, getFullName } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -51,36 +48,61 @@ const severityLevels = [
 
 const WellbeingReportsPage: React.FC = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { data: children = [], isLoading: childrenLoading } = useChildren();
+  const { data: reports = [], isLoading: reportsLoading } = useWellbeingReports();
+  const createWellbeingReport = useCreateWellbeingReport();
+  
   const [showForm, setShowForm] = useState(false);
   const [selectedChild, setSelectedChild] = useState('');
   const [incidentType, setIncidentType] = useState('injury');
   const [severity, setSeverity] = useState('low');
   const [notifyParent, setNotifyParent] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
-    time: '',
     description: '',
     actionTaken: '',
   });
 
-  const classroom = mockClassrooms[0];
-  const classroomChildren = mockChildren.filter(c => c.classroomId === classroom.id);
-
-  const handleSubmit = () => {
-    toast({
-      title: 'Report submitted!',
-      description: notifyParent
-        ? 'Parents have been notified immediately.'
-        : 'Report saved successfully.',
-    });
-    setShowForm(false);
-    setSelectedChild('');
-    setFormData({
-      date: new Date().toISOString().split('T')[0],
-      time: '',
-      description: '',
-      actionTaken: '',
-    });
+  const handleSubmit = async () => {
+    if (!selectedChild || !user || !formData.description) return;
+    
+    setIsSubmitting(true);
+    try {
+      await createWellbeingReport.mutateAsync({
+        child_id: selectedChild,
+        created_by: user.id,
+        report_date: formData.date,
+        incident_type: incidentType,
+        severity: severity,
+        description: formData.description,
+        action_taken: formData.actionTaken || null,
+        parent_notified: notifyParent,
+      });
+      
+      toast({
+        title: 'Report submitted!',
+        description: notifyParent
+          ? 'Parents have been notified immediately.'
+          : 'Report saved successfully.',
+      });
+      
+      setShowForm(false);
+      setSelectedChild('');
+      setFormData({
+        date: new Date().toISOString().split('T')[0],
+        description: '',
+        actionTaken: '',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to submit report.',
+        variant: 'destructive',
+      });
+    }
+    setIsSubmitting(false);
   };
 
   return (
@@ -114,9 +136,9 @@ const WellbeingReportsPage: React.FC = () => {
                   <SelectValue placeholder="Choose a student" />
                 </SelectTrigger>
                 <SelectContent>
-                  {classroomChildren.map(child => (
+                  {children.map(child => (
                     <SelectItem key={child.id} value={child.id}>
-                      {child.name}
+                      {getFullName(child.first_name, child.last_name)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -148,35 +170,22 @@ const WellbeingReportsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Date and Time */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Date</Label>
-                    <Input
-                      type="date"
-                      value={formData.date}
-                      onChange={e =>
-                        setFormData({ ...formData, date: e.target.value })
-                      }
-                      className="h-12"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Time</Label>
-                    <Input
-                      type="time"
-                      value={formData.time}
-                      onChange={e =>
-                        setFormData({ ...formData, time: e.target.value })
-                      }
-                      className="h-12"
-                    />
-                  </div>
+                {/* Date */}
+                <div className="space-y-2">
+                  <Label>Date</Label>
+                  <Input
+                    type="date"
+                    value={formData.date}
+                    onChange={e =>
+                      setFormData({ ...formData, date: e.target.value })
+                    }
+                    className="h-12"
+                  />
                 </div>
 
                 {/* Description */}
                 <div className="space-y-2">
-                  <Label>Description</Label>
+                  <Label>Description *</Label>
                   <Textarea
                     placeholder="Describe what happened in detail..."
                     value={formData.description}
@@ -185,6 +194,7 @@ const WellbeingReportsPage: React.FC = () => {
                     }
                     rows={4}
                     className="resize-none"
+                    required
                   />
                 </div>
 
@@ -239,7 +249,7 @@ const WellbeingReportsPage: React.FC = () => {
                 </div>
 
                 {/* Notify Parent */}
-                <div className="flex items-center gap-3 p-4 bg-warning-light rounded-xl">
+                <div className="flex items-center gap-3 p-4 bg-warning/10 rounded-xl">
                   <Checkbox
                     id="notifyParent"
                     checked={notifyParent}
@@ -265,8 +275,12 @@ const WellbeingReportsPage: React.FC = () => {
                   >
                     Cancel
                   </Button>
-                  <Button onClick={handleSubmit} className="flex-1 gap-2">
-                    <Send className="h-4 w-4" />
+                  <Button 
+                    onClick={handleSubmit} 
+                    className="flex-1 gap-2"
+                    disabled={isSubmitting || !formData.description}
+                  >
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     Submit Report
                   </Button>
                 </div>
@@ -282,73 +296,78 @@ const WellbeingReportsPage: React.FC = () => {
           <CardTitle>Recent Reports</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {mockWellbeingReports.map(report => {
-              const child = getChildById(report.childId);
-              const teacher = getUserById(report.teacherId);
-              const typeInfo = incidentTypes.find(t => t.value === report.type);
+          {reportsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : reports.length > 0 ? (
+            <div className="space-y-4">
+              {reports.map(report => {
+                const child = children.find(c => c.id === report.child_id);
+                const typeInfo = incidentTypes.find(t => t.value === report.incident_type);
 
-              return (
-                <div
-                  key={report.id}
-                  className={cn(
-                    'p-4 rounded-xl border',
-                    report.severity === 'high'
-                      ? 'bg-destructive-light border-destructive/20'
-                      : report.severity === 'medium'
-                      ? 'bg-warning-light border-warning/20'
-                      : 'bg-muted/50'
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        {typeInfo && (
-                          <typeInfo.icon className={cn('h-4 w-4', typeInfo.color)} />
-                        )}
-                        <span className="font-semibold">{child?.name}</span>
-                        <Badge
-                          className={cn(
-                            report.severity === 'high'
-                              ? 'bg-destructive text-destructive-foreground'
-                              : report.severity === 'medium'
-                              ? 'bg-warning text-warning-foreground'
-                              : 'bg-success text-success-foreground'
+                return (
+                  <div
+                    key={report.id}
+                    className={cn(
+                      'p-4 rounded-xl border',
+                      report.severity === 'high'
+                        ? 'bg-destructive/5 border-destructive/20'
+                        : report.severity === 'medium'
+                        ? 'bg-warning/5 border-warning/20'
+                        : 'bg-muted/50'
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          {typeInfo && (
+                            <typeInfo.icon className={cn('h-4 w-4', typeInfo.color)} />
                           )}
-                        >
-                          {report.severity}
-                        </Badge>
-                        {report.acknowledged && (
-                          <Badge variant="outline" className="text-success border-success">
-                            Acknowledged
+                          <span className="font-semibold">
+                            {child ? getFullName(child.first_name, child.last_name) : 'Unknown'}
+                          </span>
+                          <Badge
+                            className={cn(
+                              report.severity === 'high'
+                                ? 'bg-destructive text-destructive-foreground'
+                                : report.severity === 'medium'
+                                ? 'bg-warning text-warning-foreground'
+                                : 'bg-success text-success-foreground'
+                            )}
+                          >
+                            {report.severity}
                           </Badge>
+                        </div>
+                        <p className="text-sm text-foreground mb-2">{report.description}</p>
+                        {report.action_taken && (
+                          <p className="text-sm text-muted-foreground">
+                            <strong>Action taken:</strong> {report.action_taken}
+                          </p>
                         )}
                       </div>
-                      <p className="text-sm text-foreground mb-2">{report.description}</p>
-                      <p className="text-sm text-muted-foreground">
-                        <strong>Action taken:</strong> {report.actionTaken}
-                      </p>
+                      <div className="text-right text-sm text-muted-foreground">
+                        <p>{format(new Date(report.report_date), 'MMM d, yyyy')}</p>
+                      </div>
                     </div>
-                    <div className="text-right text-sm text-muted-foreground">
-                      <p>{format(new Date(report.date), 'MMM d, yyyy')}</p>
-                      <p>{report.time}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
-                    <span className="text-xs text-muted-foreground">
-                      Reported by {teacher?.name}
-                    </span>
-                    {report.parentNotified && (
-                      <span className="text-xs text-success flex items-center gap-1">
-                        <Bell className="h-3 w-3" />
-                        Parent notified
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
+                      <span className="text-xs text-muted-foreground">
+                        Reported on {format(new Date(report.created_at || ''), 'MMM d, h:mm a')}
                       </span>
-                    )}
+                      {report.parent_notified && (
+                        <span className="text-xs text-success flex items-center gap-1">
+                          <Bell className="h-3 w-3" />
+                          Parent notified
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-8">No reports yet</p>
+          )}
         </CardContent>
       </Card>
     </DashboardLayout>

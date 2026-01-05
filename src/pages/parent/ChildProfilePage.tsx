@@ -212,7 +212,15 @@ const ChildProfilePage: React.FC = () => {
                   <p className="text-center text-muted-foreground py-8">No meal logs yet</p>
                 ) : (
                   mealLogs.map(meal => (
-                    <MealCard key={meal.id} meal={meal} />
+                    <MealCard key={meal.id} meal={{
+                      id: meal.id,
+                      childId: meal.childId,
+                      date: meal.date,
+                      mealType: meal.mealType,
+                      foods: meal.foodItems,
+                      portionEaten: meal.portionConsumed,
+                      notes: meal.notes,
+                    }} />
                   ))
                 )}
               </TabsContent>

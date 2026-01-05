@@ -15,7 +15,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ActivityCard } from '@/components/ui/activity-card';
-import { mockChildren, mockClassrooms, mockActivityLogs } from '@/lib/mockData';
+import { useChildren } from '@/hooks/useChildren';
+import { useActivityLogs, useCreateActivityLog } from '@/hooks/useActivityLogs';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus,
   Calendar,
@@ -28,9 +30,10 @@ import {
   Battery,
   Heart,
   Moon,
+  Loader2,
 } from 'lucide-react';
 import { PhotoUpload } from '@/components/ui/photo-upload';
-import { cn } from '@/lib/utils';
+import { cn, getFullName } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 const moods = [
@@ -43,9 +46,15 @@ const moods = [
 
 const ActivityLogsPage: React.FC = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { data: children = [], isLoading: childrenLoading } = useChildren();
+  const { data: activityLogs = [], isLoading: logsLoading } = useActivityLogs();
+  const createActivityLog = useCreateActivityLog();
+  
   const [showForm, setShowForm] = useState(false);
   const [selectedChild, setSelectedChild] = useState('');
   const [selectedMood, setSelectedMood] = useState('happy');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     arrivalTime: '',
     pickupTime: '',
@@ -55,29 +64,66 @@ const ActivityLogsPage: React.FC = () => {
     generalNotes: '',
   });
 
-  const classroom = mockClassrooms[0];
-  const classroomChildren = mockChildren.filter(c => c.classroomId === classroom.id);
-
-  const handleSubmit = (isDraft: boolean) => {
-    toast({
-      title: isDraft ? 'Draft saved!' : 'Activity log published!',
-      description: isDraft
-        ? 'Your activity log has been saved as draft.'
-        : 'Parents have been notified about the activity.',
-    });
-    setShowForm(false);
-    setSelectedChild('');
-    setFormData({
-      arrivalTime: '',
-      pickupTime: '',
-      activities: '',
-      napDuration: '',
-      bathroomNotes: '',
-      generalNotes: '',
-    });
+  const handleSubmit = async (isDraft: boolean) => {
+    if (!selectedChild || !user) return;
+    
+    setIsSubmitting(true);
+    try {
+      await createActivityLog.mutateAsync({
+        child_id: selectedChild,
+        created_by: user.id,
+        arrival_time: formData.arrivalTime || null,
+        pickup_time: formData.pickupTime || null,
+        activities: formData.activities || null,
+        nap_duration: formData.napDuration || null,
+        bathroom_notes: formData.bathroomNotes || null,
+        general_notes: formData.generalNotes || null,
+        mood: selectedMood,
+      });
+      
+      toast({
+        title: isDraft ? 'Draft saved!' : 'Activity log published!',
+        description: isDraft
+          ? 'Your activity log has been saved as draft.'
+          : 'Parents have been notified about the activity.',
+      });
+      
+      setShowForm(false);
+      setSelectedChild('');
+      setFormData({
+        arrivalTime: '',
+        pickupTime: '',
+        activities: '',
+        napDuration: '',
+        bathroomNotes: '',
+        generalNotes: '',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to save activity log.',
+        variant: 'destructive',
+      });
+    }
+    setIsSubmitting(false);
   };
 
-  const selectedChildData = mockChildren.find(c => c.id === selectedChild);
+  // Transform activity logs for ActivityCard component
+  const transformedLogs = activityLogs.map(log => {
+    const child = children.find(c => c.id === log.child_id);
+    return {
+      id: log.id,
+      childId: log.child_id,
+      date: log.log_date,
+      arrivalTime: log.arrival_time || undefined,
+      pickupTime: log.pickup_time || undefined,
+      activities: log.activities || '',
+      mood: log.mood || 'happy',
+      napDuration: log.nap_duration || undefined,
+      notes: log.general_notes || '',
+      childName: child ? getFullName(child.first_name, child.last_name) : undefined,
+    };
+  });
 
   return (
     <DashboardLayout>
@@ -113,9 +159,9 @@ const ActivityLogsPage: React.FC = () => {
                   <SelectValue placeholder="Choose a student" />
                 </SelectTrigger>
                 <SelectContent>
-                  {classroomChildren.map(child => (
+                  {children.map(child => (
                     <SelectItem key={child.id} value={child.id}>
-                      {child.name}
+                      {getFullName(child.first_name, child.last_name)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -283,12 +329,13 @@ const ActivityLogsPage: React.FC = () => {
                     variant="outline"
                     onClick={() => handleSubmit(true)}
                     className="flex-1 gap-2"
+                    disabled={isSubmitting}
                   >
-                    <Save className="h-4 w-4" />
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                     Save as Draft
                   </Button>
-                  <Button onClick={() => handleSubmit(false)} className="flex-1 gap-2">
-                    <Send className="h-4 w-4" />
+                  <Button onClick={() => handleSubmit(false)} className="flex-1 gap-2" disabled={isSubmitting}>
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     Publish
                   </Button>
                 </div>
@@ -304,11 +351,19 @@ const ActivityLogsPage: React.FC = () => {
           <CardTitle>Recent Activity Logs</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {mockActivityLogs.map(log => (
-              <ActivityCard key={log.id} activity={log} showChildName />
-            ))}
-          </div>
+          {logsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : transformedLogs.length > 0 ? (
+            <div className="space-y-4">
+              {transformedLogs.map(log => (
+                <ActivityCard key={log.id} activity={log} showChildName />
+              ))}
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-8">No activity logs yet</p>
+          )}
         </CardContent>
       </Card>
     </DashboardLayout>

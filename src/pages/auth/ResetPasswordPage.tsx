@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { Baby, ArrowLeft, Loader2, Eye, EyeOff, CheckCircle, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -14,6 +15,15 @@ const ResetPasswordPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { updatePassword, isAuthenticated } = useAuth();
+
+  // Check if user came from reset email (they'll have a session)
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // User might not be authenticated if they haven't clicked the email link
+      // The link contains a token that auto-logs them in
+    }
+  }, [isAuthenticated]);
 
   const passwordRequirements = [
     { label: 'At least 8 characters', met: password.length >= 8 },
@@ -48,15 +58,23 @@ const ResetPasswordPage: React.FC = () => {
 
     setIsLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    const result = await updatePassword(password);
     
-    toast({
-      title: 'Password reset successful!',
-      description: 'You can now log in with your new password.',
-    });
+    if (result.success) {
+      toast({
+        title: 'Password reset successful!',
+        description: 'You can now log in with your new password.',
+      });
+      navigate('/login');
+    } else {
+      toast({
+        title: 'Failed to reset password',
+        description: result.error || 'Please try again.',
+        variant: 'destructive',
+      });
+    }
     
-    navigate('/login');
+    setIsLoading(false);
   };
 
   return (

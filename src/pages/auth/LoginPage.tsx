@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -16,9 +16,16 @@ const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { login } = useAuth();
+  const { login, isAuthenticated, role, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!loading && isAuthenticated && role) {
+      navigate(`/${role}`, { replace: true });
+    }
+  }, [isAuthenticated, role, loading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,20 +39,21 @@ const LoginPage: React.FC = () => {
         title: 'Welcome back!',
         description: 'You have successfully logged in.',
       });
-      // Navigate based on role - we'll use a simple check from the mock data
-      if (email.includes('admin')) {
-        navigate('/admin');
-      } else if (email.includes('teacher') || email.includes('emily') || email.includes('michael') || email.includes('jessica')) {
-        navigate('/teacher');
-      } else {
-        navigate('/parent');
-      }
+      // Role-based redirect happens via useEffect after auth state updates
     } else {
       setError(result.error || 'Login failed');
     }
 
     setIsLoading(false);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -71,21 +79,10 @@ const LoginPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Demo Accounts */}
-          <div className="bg-muted/50 rounded-xl p-4 mb-6">
-            <p className="text-sm font-medium text-foreground mb-2">Demo Accounts:</p>
-            <div className="space-y-1 text-xs text-muted-foreground">
-              <p><strong>Admin:</strong> admin@littlesteps.com</p>
-              <p><strong>Teacher:</strong> emily@littlesteps.com</p>
-              <p><strong>Parent:</strong> john.smith@email.com</p>
-              <p className="italic mt-2">Use any password (min 6 chars)</p>
-            </div>
-          </div>
-
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="bg-destructive-light text-destructive text-sm p-3 rounded-lg">
+              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg border border-destructive/20">
                 {error}
               </div>
             )}
@@ -159,6 +156,13 @@ const LoginPage: React.FC = () => {
               )}
             </Button>
           </form>
+
+          <p className="text-center text-sm text-muted-foreground mt-6">
+            Don't have an account?{' '}
+            <Link to="/setup" className="text-primary hover:underline font-medium">
+              Set up your daycare
+            </Link>
+          </p>
         </div>
       </div>
 
