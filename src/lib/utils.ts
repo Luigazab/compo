@@ -14,6 +14,10 @@ export function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+export function getFullName(firstName: string, lastName: string): string {
+  return `${firstName} ${lastName}`;
+}
+
 export function calculateAge(dateOfBirth: string): number {
   const today = new Date();
   const birthDate = new Date(dateOfBirth);

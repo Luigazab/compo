@@ -3,22 +3,31 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/contexts/AuthContext';
 import { Baby, ArrowLeft, Loader2, CheckCircle, Mail } from 'lucide-react';
 
 const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [error, setError] = useState('');
+  
+  const { resetPassword } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    const result = await resetPassword(email);
+    
+    if (result.success) {
+      setIsSubmitted(true);
+    } else {
+      setError(result.error || 'Failed to send reset email');
+    }
     
     setIsLoading(false);
-    setIsSubmitted(true);
   };
 
   return (
@@ -49,6 +58,12 @@ const ForgotPasswordPage: React.FC = () => {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5">
+                {error && (
+                  <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg border border-destructive/20">
+                    {error}
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
@@ -80,7 +95,7 @@ const ForgotPasswordPage: React.FC = () => {
             </>
           ) : (
             <div className="text-center py-4">
-              <div className="w-16 h-16 rounded-full bg-success-light flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="h-8 w-8 text-success" />
               </div>
               <h2 className="text-2xl font-bold text-foreground">Check your email</h2>

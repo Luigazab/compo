@@ -6,18 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { MealCard } from '@/components/ui/meal-card';
-import { mockChildren, mockClassrooms, mockMealLogs } from '@/lib/mockData';
-import { Plus, Coffee, Sun, Cookie, Moon, Users, Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useChildren } from '@/hooks/useChildren';
+import { useMealLogs, useCreateMealLog } from '@/hooks/useMealLogs';
+import { useAuth } from '@/contexts/AuthContext';
+import { Plus, Coffee, Sun, Cookie, Moon, Users, Check, Loader2 } from 'lucide-react';
+import { cn, getFullName } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 const mealTypes = [
@@ -53,15 +47,18 @@ const commonFoods = [
 
 const MealTrackingPage: React.FC = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { data: children = [], isLoading: childrenLoading } = useChildren();
+  const { data: mealLogs = [], isLoading: mealsLoading } = useMealLogs();
+  const createMealLog = useCreateMealLog();
+  
   const [showForm, setShowForm] = useState(false);
   const [selectedChildren, setSelectedChildren] = useState<string[]>([]);
   const [mealType, setMealType] = useState('lunch');
   const [selectedFoods, setSelectedFoods] = useState<string[]>([]);
   const [portion, setPortion] = useState('all');
   const [notes, setNotes] = useState('');
-
-  const classroom = mockClassrooms[0];
-  const classroomChildren = mockChildren.filter(c => c.classroomId === classroom.id);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toggleChild = (childId: string) => {
     setSelectedChildren(prev =>
@@ -75,25 +72,61 @@ const MealTrackingPage: React.FC = () => {
     );
   };
 
-  const handleSubmit = () => {
-    toast({
-      title: 'Meals logged!',
-      description: `Logged ${mealType} for ${selectedChildren.length} students.`,
-    });
-    setShowForm(false);
-    setSelectedChildren([]);
-    setSelectedFoods([]);
-    setNotes('');
+  const handleSubmit = async () => {
+    if (!user || selectedChildren.length === 0 || selectedFoods.length === 0) return;
+    
+    setIsSubmitting(true);
+    try {
+      // Create meal log for each selected child
+      for (const childId of selectedChildren) {
+        await createMealLog.mutateAsync({
+          child_id: childId,
+          created_by: user.id,
+          meal_type: mealType,
+          food_items: selectedFoods.join(', '),
+          portion_consumed: portion,
+          notes: notes || null,
+        });
+      }
+      
+      toast({
+        title: 'Meals logged!',
+        description: `Logged ${mealType} for ${selectedChildren.length} students.`,
+      });
+      
+      setShowForm(false);
+      setSelectedChildren([]);
+      setSelectedFoods([]);
+      setNotes('');
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to log meals.',
+        variant: 'destructive',
+      });
+    }
+    setIsSubmitting(false);
   };
 
   // Group meals by child
-  const mealsByChild = mockMealLogs.reduce((acc, meal) => {
-    if (!acc[meal.childId]) {
-      acc[meal.childId] = [];
+  const mealsByChild = mealLogs.reduce((acc, meal) => {
+    if (!acc[meal.child_id]) {
+      acc[meal.child_id] = [];
     }
-    acc[meal.childId].push(meal);
+    acc[meal.child_id].push(meal);
     return acc;
-  }, {} as Record<string, typeof mockMealLogs>);
+  }, {} as Record<string, typeof mealLogs>);
+
+  // Transform meal logs for MealCard component
+  const transformMeal = (meal: typeof mealLogs[0]) => ({
+    id: meal.id,
+    childId: meal.child_id,
+    date: meal.meal_date,
+    mealType: meal.meal_type || 'lunch',
+    foods: meal.food_items.split(', '),
+    portionEaten: meal.portion_consumed || 'all',
+    notes: meal.notes || undefined,
+  });
 
   return (
     <DashboardLayout>
@@ -150,46 +183,52 @@ const MealTrackingPage: React.FC = () => {
                   size="sm"
                   onClick={() =>
                     setSelectedChildren(
-                      selectedChildren.length === classroomChildren.length
+                      selectedChildren.length === children.length
                         ? []
-                        : classroomChildren.map(c => c.id)
+                        : children.map(c => c.id)
                     )
                   }
                 >
-                  {selectedChildren.length === classroomChildren.length
+                  {selectedChildren.length === children.length
                     ? 'Deselect All'
                     : 'Select All'}
                 </Button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {classroomChildren.map(child => (
-                  <button
-                    key={child.id}
-                    type="button"
-                    onClick={() => toggleChild(child.id)}
-                    className={cn(
-                      'flex items-center gap-2 p-3 rounded-xl border transition-all text-left',
-                      selectedChildren.includes(child.id)
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50'
-                    )}
-                  >
-                    <div
+              {childrenLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {children.map(child => (
+                    <button
+                      key={child.id}
+                      type="button"
+                      onClick={() => toggleChild(child.id)}
                       className={cn(
-                        'w-5 h-5 rounded flex items-center justify-center',
+                        'flex items-center gap-2 p-3 rounded-xl border transition-all text-left',
                         selectedChildren.includes(child.id)
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted'
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover:border-primary/50'
                       )}
                     >
-                      {selectedChildren.includes(child.id) && (
-                        <Check className="h-3 w-3" />
-                      )}
-                    </div>
-                    <span className="text-sm font-medium">{child.name}</span>
-                  </button>
-                ))}
-              </div>
+                      <div
+                        className={cn(
+                          'w-5 h-5 rounded flex items-center justify-center',
+                          selectedChildren.includes(child.id)
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted'
+                        )}
+                      >
+                        {selectedChildren.includes(child.id) && (
+                          <Check className="h-3 w-3" />
+                        )}
+                      </div>
+                      <span className="text-sm font-medium">{getFullName(child.first_name, child.last_name)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Food Items */}
@@ -260,8 +299,11 @@ const MealTrackingPage: React.FC = () => {
               <Button
                 onClick={handleSubmit}
                 className="flex-1"
-                disabled={selectedChildren.length === 0 || selectedFoods.length === 0}
+                disabled={selectedChildren.length === 0 || selectedFoods.length === 0 || isSubmitting}
               >
+                {isSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : null}
                 Log Meals ({selectedChildren.length})
               </Button>
             </div>
@@ -270,34 +312,40 @@ const MealTrackingPage: React.FC = () => {
       )}
 
       {/* Today's Meal Logs */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {classroomChildren.slice(0, 4).map(child => {
-          const childMeals = mealsByChild[child.id] || [];
-          return (
-            <Card key={child.id} className="shadow-card">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold flex items-center justify-between">
-                  {child.name}
-                  <Badge variant="secondary">{childMeals.length} meals</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {childMeals.length > 0 ? (
-                  <div className="space-y-3">
-                    {childMeals.map(meal => (
-                      <MealCard key={meal.id} meal={meal} />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-center py-4 text-sm">
-                    No meals logged today
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      {mealsLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {children.slice(0, 6).map(child => {
+            const childMeals = mealsByChild[child.id] || [];
+            return (
+              <Card key={child.id} className="shadow-card">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold flex items-center justify-between">
+                    {getFullName(child.first_name, child.last_name)}
+                    <Badge variant="secondary">{childMeals.length} meals</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {childMeals.length > 0 ? (
+                    <div className="space-y-3">
+                      {childMeals.map(meal => (
+                        <MealCard key={meal.id} meal={transformMeal(meal)} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-center py-4 text-sm">
+                      No meals logged today
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </DashboardLayout>
   );
 };

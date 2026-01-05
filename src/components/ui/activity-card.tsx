@@ -1,12 +1,24 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { ActivityLog, getChildById, getUserById } from '@/lib/mockData';
 import { Clock, Moon, Smile, Frown, Zap, Battery, Heart } from 'lucide-react';
 import { format } from 'date-fns';
 
+interface ActivityCardActivity {
+  id: string;
+  childId: string;
+  date: string;
+  arrivalTime?: string;
+  pickupTime?: string;
+  activities: string;
+  mood: string;
+  napDuration?: string;
+  notes?: string;
+  childName?: string;
+}
+
 interface ActivityCardProps {
-  activity: ActivityLog;
+  activity: ActivityCardActivity;
   showChildName?: boolean;
   className?: string;
 }
@@ -16,9 +28,6 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
   showChildName = false,
   className,
 }) => {
-  const child = getChildById(activity.childId);
-  const teacher = getUserById(activity.teacherId);
-
   const getMoodIcon = () => {
     switch (activity.mood) {
       case 'happy':
@@ -31,24 +40,26 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
         return <Battery className="h-5 w-5 text-mood-tired" />;
       case 'calm':
         return <Heart className="h-5 w-5 text-mood-calm" />;
+      default:
+        return <Smile className="h-5 w-5 text-mood-happy" />;
     }
   };
 
   const getMoodLabel = () => {
-    return activity.mood.charAt(0).toUpperCase() + activity.mood.slice(1);
+    return activity.mood?.charAt(0).toUpperCase() + activity.mood?.slice(1) || 'Happy';
   };
 
   return (
     <div className={cn('bg-card rounded-2xl border p-5 shadow-card', className)}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
-          {showChildName && child && (
-            <h3 className="font-semibold text-foreground mb-2">{child.name}</h3>
+          {showChildName && activity.childName && (
+            <h3 className="font-semibold text-foreground mb-2">{activity.childName}</h3>
           )}
           <div className="flex items-center gap-3 text-sm text-muted-foreground mb-3">
             <span className="flex items-center gap-1">
               <Clock className="h-4 w-4" />
-              {activity.arrivalTime} - {activity.pickupTime || 'Present'}
+              {activity.arrivalTime || 'N/A'} - {activity.pickupTime || 'Present'}
             </span>
             {activity.napDuration && (
               <span className="flex items-center gap-1">
@@ -57,10 +68,10 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
               </span>
             )}
           </div>
-          <p className="text-foreground">{activity.activities}</p>
-          {activity.generalNotes && (
+          <p className="text-foreground">{activity.activities || 'No activities recorded'}</p>
+          {activity.notes && (
             <p className="text-sm text-muted-foreground mt-2 italic">
-              "{activity.generalNotes}"
+              "{activity.notes}"
             </p>
           )}
         </div>
@@ -71,10 +82,7 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
           </span>
         </div>
       </div>
-      <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-        <span className="text-xs text-muted-foreground">
-          Logged by {teacher?.name}
-        </span>
+      <div className="flex items-center justify-end mt-4 pt-4 border-t border-border">
         <span className="text-xs text-muted-foreground">
           {format(new Date(activity.date), 'EEEE, MMM d')}
         </span>

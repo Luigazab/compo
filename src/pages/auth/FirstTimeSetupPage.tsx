@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { Baby, Loader2, Building, Clock, User, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -18,8 +19,10 @@ const steps = [
 const FirstTimeSetupPage: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { signUp } = useAuth();
 
   // Form state
   const [adminData, setAdminData] = useState({
@@ -44,7 +47,30 @@ const FirstTimeSetupPage: React.FC = () => {
     workDays: ['mon', 'tue', 'wed', 'thu', 'fri'],
   });
 
+  const validateStep = () => {
+    if (currentStep === 1) {
+      if (!adminData.name || !adminData.email || !adminData.password) {
+        setError('Please fill in all required fields');
+        return false;
+      }
+      if (adminData.password.length < 6) {
+        setError('Password must be at least 6 characters');
+        return false;
+      }
+    }
+    if (currentStep === 2) {
+      if (!daycareData.name) {
+        setError('Please enter your daycare name');
+        return false;
+      }
+    }
+    setError('');
+    return true;
+  };
+
   const handleNext = () => {
+    if (!validateStep()) return;
+    
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
     } else {
@@ -60,16 +86,21 @@ const FirstTimeSetupPage: React.FC = () => {
 
   const handleSubmit = async () => {
     setIsLoading(true);
+    setError('');
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Create admin account using Supabase
+    const result = await signUp(adminData.email, adminData.password, adminData.name, 'admin');
     
-    toast({
-      title: 'Setup complete!',
-      description: 'Your daycare portal is ready to use.',
-    });
-    
-    navigate('/login');
+    if (result.success) {
+      toast({
+        title: 'Setup complete!',
+        description: 'Your daycare portal is ready. Please check your email to verify your account.',
+      });
+      navigate('/login');
+    } else {
+      setError(result.error || 'Failed to create account');
+      setIsLoading(false);
+    }
   };
 
   const timezones = [
@@ -129,6 +160,12 @@ const FirstTimeSetupPage: React.FC = () => {
         </div>
 
         <div className="bg-card rounded-2xl border shadow-card p-8">
+          {error && (
+            <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg border border-destructive/20 mb-6">
+              {error}
+            </div>
+          )}
+
           {/* Step 1: Admin Account */}
           {currentStep === 1 && (
             <div className="space-y-6">
@@ -141,13 +178,14 @@ const FirstTimeSetupPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="adminName">Full Name</Label>
+                  <Label htmlFor="adminName">Full Name *</Label>
                   <Input
                     id="adminName"
                     value={adminData.name}
                     onChange={e => setAdminData({ ...adminData, name: e.target.value })}
                     placeholder="John Doe"
                     className="h-12 input-focus"
+                    required
                   />
                 </div>
                 <div className="space-y-2">
@@ -163,7 +201,7 @@ const FirstTimeSetupPage: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="adminEmail">Email</Label>
+                <Label htmlFor="adminEmail">Email *</Label>
                 <Input
                   id="adminEmail"
                   type="email"
@@ -171,11 +209,12 @@ const FirstTimeSetupPage: React.FC = () => {
                   onChange={e => setAdminData({ ...adminData, email: e.target.value })}
                   placeholder="admin@yourdaycare.com"
                   className="h-12 input-focus"
+                  required
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="adminPassword">Password</Label>
+                <Label htmlFor="adminPassword">Password * (min 6 characters)</Label>
                 <Input
                   id="adminPassword"
                   type="password"
@@ -183,6 +222,7 @@ const FirstTimeSetupPage: React.FC = () => {
                   onChange={e => setAdminData({ ...adminData, password: e.target.value })}
                   placeholder="Create a strong password"
                   className="h-12 input-focus"
+                  required
                 />
               </div>
             </div>
@@ -199,13 +239,14 @@ const FirstTimeSetupPage: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="daycareName">Daycare Name</Label>
+                <Label htmlFor="daycareName">Daycare Name *</Label>
                 <Input
                   id="daycareName"
                   value={daycareData.name}
                   onChange={e => setDaycareData({ ...daycareData, name: e.target.value })}
                   placeholder="Sunshine Kids Daycare"
                   className="h-12 input-focus"
+                  required
                 />
               </div>
 

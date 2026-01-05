@@ -1,11 +1,20 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { MealLog } from '@/lib/mockData';
 import { Coffee, Sun, Cookie, Moon } from 'lucide-react';
 
+interface MealCardMeal {
+  id: string;
+  childId: string;
+  date: string;
+  mealType: string;
+  foods: string[];
+  portionEaten: string;
+  notes?: string;
+}
+
 interface MealCardProps {
-  meal: MealLog;
+  meal: MealCardMeal;
   className?: string;
 }
 
@@ -20,31 +29,35 @@ export const MealCard: React.FC<MealCardProps> = ({ meal, className }) => {
         return <Cookie className="h-5 w-5" />;
       case 'dinner':
         return <Moon className="h-5 w-5" />;
+      default:
+        return <Coffee className="h-5 w-5" />;
     }
   };
 
   const getMealLabel = () => {
-    return meal.mealType.charAt(0).toUpperCase() + meal.mealType.slice(1);
+    return meal.mealType?.charAt(0).toUpperCase() + meal.mealType?.slice(1) || 'Meal';
   };
 
   const getPortionBadge = () => {
-    const styles = {
-      all: 'bg-success-light text-success',
+    const styles: Record<string, string> = {
+      all: 'bg-success/10 text-success',
       most: 'bg-primary/10 text-primary',
-      some: 'bg-warning-light text-warning-foreground',
-      none: 'bg-destructive-light text-destructive',
+      some: 'bg-warning/10 text-warning',
+      none: 'bg-destructive/10 text-destructive',
     };
 
-    const labels = {
+    const labels: Record<string, string> = {
       all: 'Ate all',
       most: 'Ate most',
       some: 'Ate some',
       none: 'Did not eat',
     };
 
+    const portion = meal.portionEaten || 'all';
+
     return (
-      <Badge className={cn('font-medium', styles[meal.portionConsumed])}>
-        {labels[meal.portionConsumed]}
+      <Badge className={cn('font-medium', styles[portion] || styles.all)}>
+        {labels[portion] || labels.all}
       </Badge>
     );
   };
@@ -58,10 +71,9 @@ export const MealCard: React.FC<MealCardProps> = ({ meal, className }) => {
         <div className="flex-1">
           <div className="flex items-center justify-between">
             <h4 className="font-semibold text-foreground">{getMealLabel()}</h4>
-            <span className="text-xs text-muted-foreground">{meal.timestamp}</span>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            {meal.foodItems.join(', ')}
+            {meal.foods?.join(', ') || 'No foods recorded'}
           </p>
           <div className="flex items-center justify-between mt-2">
             {getPortionBadge()}

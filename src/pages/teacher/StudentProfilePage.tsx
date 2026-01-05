@@ -174,12 +174,8 @@ const StudentProfilePage: React.FC = () => {
                         activities: log.activities || '',
                         mood: (log.mood as 'happy' | 'sad' | 'energetic' | 'tired' | 'calm') || 'calm',
                         napDuration: log.nap_duration || undefined,
-                        bathroomNotes: log.bathroom_notes || undefined,
-                        generalNotes: log.general_notes || undefined,
-                        photos: [],
-                        teacherId: log.created_by,
-                        status: 'published',
-                      }} 
+                        notes: log.general_notes || undefined,
+                      }}
                     />
                   ))}
                 </div>
@@ -210,11 +206,10 @@ const StudentProfilePage: React.FC = () => {
                         childId: meal.child_id,
                         date: meal.meal_date,
                         mealType: (meal.meal_type as 'breakfast' | 'lunch' | 'snack' | 'dinner') || 'lunch',
-                        foodItems: meal.food_items.split(',').map(f => f.trim()),
-                        portionConsumed: (meal.portion_consumed as 'none' | 'some' | 'most' | 'all') || 'some',
+                        foods: meal.food_items.split(',').map(f => f.trim()),
+                        portionEaten: (meal.portion_consumed as 'none' | 'some' | 'most' | 'all') || 'some',
                         notes: meal.notes || undefined,
-                        timestamp: meal.created_at || '',
-                      }} 
+                      }}
                     />
                   ))}
                 </div>
