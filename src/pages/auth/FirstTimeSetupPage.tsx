@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Baby, Loader2, Building, Clock, User, CheckCircle } from 'lucide-react';
+import { Baby, Loader2, Building, Clock, User, CheckCircle, School } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const steps = [
@@ -115,12 +115,12 @@ const FirstTimeSetupPage: React.FC = () => {
       <div className="max-w-2xl mx-auto">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-glow">
-            <Baby className="h-7 w-7 text-primary-foreground" />
+          <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-glow border-2 border-slate-600">
+            <School className="h-7 w-7 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">LittleSteps</h1>
-            <p className="text-sm text-muted-foreground">First-Time Setup</p>
+            <img className="text-foreground" src=".\logo.PNG" alt="ComPo" width="125px" height="auto" />
+            <p className="text-sm text-muted-foreground">Admin account setup</p>
           </div>
         </div>
 
@@ -183,7 +183,7 @@ const FirstTimeSetupPage: React.FC = () => {
                     id="adminName"
                     value={adminData.name}
                     onChange={e => setAdminData({ ...adminData, name: e.target.value })}
-                    placeholder="John Doe"
+                    placeholder="Juan Dela Cruz"
                     className="h-12 input-focus"
                     required
                   />
@@ -194,7 +194,7 @@ const FirstTimeSetupPage: React.FC = () => {
                     id="adminPhone"
                     value={adminData.phone}
                     onChange={e => setAdminData({ ...adminData, phone: e.target.value })}
-                    placeholder="(555) 123-4567"
+                    placeholder="0912 3456 789"
                     className="h-12 input-focus"
                   />
                 </div>
@@ -207,7 +207,7 @@ const FirstTimeSetupPage: React.FC = () => {
                   type="email"
                   value={adminData.email}
                   onChange={e => setAdminData({ ...adminData, email: e.target.value })}
-                  placeholder="admin@yourdaycare.com"
+                  placeholder="sample@email.com"
                   className="h-12 input-focus"
                   required
                 />
@@ -256,7 +256,7 @@ const FirstTimeSetupPage: React.FC = () => {
                   id="daycareAddress"
                   value={daycareData.address}
                   onChange={e => setDaycareData({ ...daycareData, address: e.target.value })}
-                  placeholder="123 Main Street, City, State 12345"
+                  placeholder="123 Main Street, City, Barangay 12345"
                   className="input-focus resize-none"
                   rows={2}
                 />
@@ -269,7 +269,7 @@ const FirstTimeSetupPage: React.FC = () => {
                     id="daycarePhone"
                     value={daycareData.phone}
                     onChange={e => setDaycareData({ ...daycareData, phone: e.target.value })}
-                    placeholder="(555) 123-4567"
+                    placeholder="0912 3456 789"
                     className="h-12 input-focus"
                   />
                 </div>
@@ -280,7 +280,7 @@ const FirstTimeSetupPage: React.FC = () => {
                     type="email"
                     value={daycareData.email}
                     onChange={e => setDaycareData({ ...daycareData, email: e.target.value })}
-                    placeholder="info@yourdaycare.com"
+                    placeholder="sample@email.com"
                     className="h-12 input-focus"
                   />
                 </div>

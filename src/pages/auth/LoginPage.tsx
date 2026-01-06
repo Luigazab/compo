@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Baby, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Baby, Eye, EyeOff, Loader2, School } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -56,20 +56,21 @@ const LoginPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen relative flex">
+      <div className=" absolute top-8 left-24 flex items-center gap-3 x-20">
+        <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-glow border-2 border-slate-600">
+          <School className="h-7 w-7 text-primary-foreground" />
+        </div>
+        <div>
+          <img className="text-foreground" src=".\logo.PNG" alt="ComPo" width="10%" height="auto" />
+          <p className="text-sm text-muted-foreground">Daycare Communication Portal</p>
+        </div>
+      </div>
       {/* Left Panel - Form */}
       <div className="flex-1 flex flex-col justify-center px-6 py-12 lg:px-20">
         <div className="mx-auto w-full max-w-sm">
           {/* Logo */}
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-glow">
-              <Baby className="h-7 w-7 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">LittleSteps</h1>
-              <p className="text-sm text-muted-foreground">Daycare Portal</p>
-            </div>
-          </div>
+          
 
           {/* Welcome */}
           <div className="mb-8">
@@ -96,7 +97,7 @@ const LoginPage: React.FC = () => {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
-                className="h-12 input-focus"
+                className="h-12 input-focus border-2 border-black/30"
               />
             </div>
 
@@ -110,7 +111,7 @@ const LoginPage: React.FC = () => {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
-                  className="h-12 pr-12 input-focus"
+                  className="h-12 pr-12 input-focus border-2 border-black/30"
                 />
                 <button
                   type="button"
@@ -168,36 +169,22 @@ const LoginPage: React.FC = () => {
 
       {/* Right Panel - Decorative */}
       <div className="hidden lg:flex lg:flex-1 bg-gradient-to-br from-primary via-primary to-[hsl(180_60%_45%)] relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-20 left-20 w-64 h-64 bg-white rounded-full blur-3xl" />
-          <div className="absolute bottom-20 right-20 w-96 h-96 bg-white rounded-full blur-3xl" />
+        <div className="absolute inset-0 opacity-20 flex">
+          <div className="absolute top-20 left-20 w-64 h-64 bg-pink-200 rounded-full blur-3xl" />
+          <div className="absolute bottom-20 right-20 w-96 h-96 bg-pink-200 rounded-full blur-3xl" />
+          <img src="loginbg.png" alt="" />
         </div>
-        <div className="relative z-10 flex flex-col justify-center items-center text-center px-12">
-          <div className="w-20 h-20 rounded-3xl bg-white/20 backdrop-blur flex items-center justify-center mb-8">
-            <Baby className="h-12 w-12 text-white" />
+        <div className="relative z-10 flex-1 flex flex-col justify-center items-center text-center px-12">
+          <div className="w-20 h-20 rounded-3xl bg-white/30 backdrop-blur flex items-center justify-center mb-8">
+            <School className="h-12 w-12 text-white" />
+            {/* <img src="./icon.png" alt="school logo" /> */}
           </div>
           <h2 className="text-4xl font-bold text-white mb-4">
             Connecting Families & Teachers
           </h2>
-          <p className="text-white/80 text-lg max-w-md">
+          <p className="text-white font-semibold text-lg max-w-md">
             Real-time communication, activity tracking, and peace of mind for parents and educators.
           </p>
-          <div className="mt-12 flex items-center gap-8">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-white">500+</div>
-              <div className="text-white/70 text-sm">Happy Families</div>
-            </div>
-            <div className="w-px h-12 bg-white/30" />
-            <div className="text-center">
-              <div className="text-3xl font-bold text-white">50+</div>
-              <div className="text-white/70 text-sm">Classrooms</div>
-            </div>
-            <div className="w-px h-12 bg-white/30" />
-            <div className="text-center">
-              <div className="text-3xl font-bold text-white">10k+</div>
-              <div className="text-white/70 text-sm">Daily Updates</div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

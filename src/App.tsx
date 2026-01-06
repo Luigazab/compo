@@ -68,7 +68,7 @@ const AppRoutes = () => {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route path="/login" element={isAuthenticated ? <Navigate to={`/${role}`} /> : <LoginPage />} />
+      <Route path="/login" element={isAuthenticated && role ? (<Navigate to={`/${role}`} replace /> ) : (<LoginPage />)} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/setup" element={<FirstTimeSetupPage />} />
@@ -104,8 +104,7 @@ const AppRoutes = () => {
       <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><SystemSettingsPage /></ProtectedRoute>} />
 
       {/* Root redirect */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      
+      <Route path="/" element={isAuthenticated && role ? (<Navigate to={`/${role}`} replace />) : (<Navigate to="/login" replace />)} />
       {/* 404 */}
       <Route path="*" element={<NotFound />} />
     </Routes>
