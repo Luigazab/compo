@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -29,39 +30,107 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Edit, Archive, Users } from "lucide-react";
-import { mockClassrooms, mockUsers, mockChildren } from "@/lib/mockData";
+import { Plus, Search, Edit, Trash2, Users } from "lucide-react";
+import { useClassrooms, useCreateClassroom, useUpdateClassroom, useDeleteClassroom, Classroom } from "@/hooks/useClassrooms";
+import { useTeachers } from "@/hooks/useUsers";
+import { useChildren } from "@/hooks/useChildren";
+import { toast } from "sonner";
 
 const ClassroomManagementPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedClassroom, setSelectedClassroom] = useState<any>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedClassroom, setSelectedClassroom] = useState<Classroom | null>(null);
+  
+  const [formData, setFormData] = useState({
+    name: "",
+    age_group: "",
+    capacity: 20,
+    teacher_id: "",
+  });
 
-  const teachers = mockUsers.filter((u) => u.role === "teacher");
+  const { data: classrooms = [], isLoading } = useClassrooms();
+  const { data: teachers = [] } = useTeachers();
+  const { data: children = [] } = useChildren();
+  
+  const createClassroom = useCreateClassroom();
+  const updateClassroom = useUpdateClassroom();
+  const deleteClassroom = useDeleteClassroom();
 
-  const filteredClassrooms = mockClassrooms.filter(
+  const filteredClassrooms = classrooms.filter(
     (classroom) =>
       classroom.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      classroom.ageGroup.toLowerCase().includes(searchTerm.toLowerCase())
+      (classroom.age_group?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
-  const getTeacherName = (teacherId: string) => {
-    const teacher = mockUsers.find((u) => u.id === teacherId);
-    return teacher ? teacher.name : "Unassigned";
+  const getTeacherName = (teacherId: string | null) => {
+    if (!teacherId) return "Unassigned";
+    const teacher = teachers.find((t) => t.id === teacherId);
+    return teacher ? teacher.full_name : "Unassigned";
   };
 
   const getStudentCount = (classroomId: string) => {
-    return mockChildren.filter((c) => c.classroomId === classroomId).length;
+    return children.filter((c) => c.classroom_id === classroomId).length;
   };
 
-  const handleEdit = (classroom: any) => {
+  const handleEdit = (classroom: Classroom) => {
     setSelectedClassroom(classroom);
+    setFormData({
+      name: classroom.name,
+      age_group: classroom.age_group || "",
+      capacity: classroom.capacity || 20,
+      teacher_id: classroom.teacher_id || "",
+    });
     setIsDialogOpen(true);
   };
 
   const handleCreate = () => {
     setSelectedClassroom(null);
+    setFormData({ name: "", age_group: "", capacity: 20, teacher_id: "" });
     setIsDialogOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    try {
+      if (selectedClassroom) {
+        await updateClassroom.mutateAsync({
+          id: selectedClassroom.id,
+          name: formData.name,
+          age_group: formData.age_group || null,
+          capacity: formData.capacity,
+          teacher_id: formData.teacher_id || null,
+        });
+        toast.success("Classroom updated successfully");
+      } else {
+        await createClassroom.mutateAsync({
+          name: formData.name,
+          age_group: formData.age_group || null,
+          capacity: formData.capacity,
+          teacher_id: formData.teacher_id || null,
+        });
+        toast.success("Classroom created successfully");
+      }
+      setIsDialogOpen(false);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to save classroom");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedClassroom) return;
+    try {
+      await deleteClassroom.mutateAsync(selectedClassroom.id);
+      toast.success("Classroom deleted successfully");
+      setIsDeleteDialogOpen(false);
+      setSelectedClassroom(null);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete classroom");
+    }
+  };
+
+  const openDeleteDialog = (classroom: Classroom) => {
+    setSelectedClassroom(classroom);
+    setIsDeleteDialogOpen(true);
   };
 
   return (
@@ -97,7 +166,7 @@ const ClassroomManagementPage = () => {
                 <DialogDescription>
                   {selectedClassroom
                     ? "Update classroom details"
-                    : "Create a new classroom for your daycare"}
+                    : "Create a new classroom for Compo"}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -105,13 +174,17 @@ const ClassroomManagementPage = () => {
                   <Label htmlFor="name">Classroom Name</Label>
                   <Input
                     id="name"
-                    defaultValue={selectedClassroom?.name}
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="e.g., Sunshine Room"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="ageGroup">Age Group</Label>
-                  <Select defaultValue={selectedClassroom?.ageGroup}>
+                  <Select 
+                    value={formData.age_group} 
+                    onValueChange={(value) => setFormData({ ...formData, age_group: value })}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select age group" />
                     </SelectTrigger>
@@ -129,20 +202,25 @@ const ClassroomManagementPage = () => {
                   <Input
                     id="capacity"
                     type="number"
-                    defaultValue={selectedClassroom?.capacity}
+                    value={formData.capacity}
+                    onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) || 20 })}
                     placeholder="e.g., 12"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="teacher">Assign Teacher</Label>
-                  <Select defaultValue={selectedClassroom?.teacherId}>
+                  <Select 
+                    value={formData.teacher_id} 
+                    onValueChange={(value) => setFormData({ ...formData, teacher_id: value })}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select teacher" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="">Unassigned</SelectItem>
                       {teachers.map((teacher) => (
                         <SelectItem key={teacher.id} value={teacher.id}>
-                          {teacher.name}
+                          {teacher.full_name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -153,7 +231,10 @@ const ClassroomManagementPage = () => {
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={() => setIsDialogOpen(false)}>
+                <Button 
+                  onClick={handleSubmit} 
+                  disabled={!formData.name || createClassroom.isPending || updateClassroom.isPending}
+                >
                   {selectedClassroom ? "Save Changes" : "Create Classroom"}
                 </Button>
               </DialogFooter>
@@ -161,44 +242,56 @@ const ClassroomManagementPage = () => {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          {filteredClassrooms.map((classroom) => (
-            <div
-              key={classroom.id}
-              className="bg-card rounded-xl border border-border p-5 hover:shadow-md transition-shadow"
-            >
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <h3 className="font-semibold text-lg">{classroom.name}</h3>
-                  <p className="text-sm text-muted-foreground">{classroom.ageGroup}</p>
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-40" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            {filteredClassrooms.map((classroom) => (
+              <div
+                key={classroom.id}
+                className="bg-card rounded-xl border border-border p-5 hover:shadow-md transition-shadow"
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h3 className="font-semibold text-lg">{classroom.name}</h3>
+                    <p className="text-sm text-muted-foreground">{classroom.age_group || 'No age group'}</p>
+                  </div>
+                  <Badge variant="secondary">
+                    {getStudentCount(classroom.id)}/{classroom.capacity || 20}
+                  </Badge>
                 </div>
-                <Badge variant="secondary">
-                  {getStudentCount(classroom.id)}/{classroom.capacity}
-                </Badge>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  <span>Teacher: {getTeacherName(classroom.teacherId)}</span>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <span>Teacher: {getTeacherName(classroom.teacher_id)}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => handleEdit(classroom)}
+                  >
+                    <Edit className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => openDeleteDialog(classroom)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
-              <div className="flex gap-2 mt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => handleEdit(classroom)}
-                >
-                  <Edit className="h-4 w-4 mr-1" />
-                  Edit
-                </Button>
-                <Button variant="outline" size="sm">
-                  <Archive className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         <div className="bg-card rounded-xl border border-border overflow-hidden">
           <Table>
@@ -214,37 +307,84 @@ const ClassroomManagementPage = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredClassrooms.map((classroom) => {
-                const studentCount = getStudentCount(classroom.id);
-                const isFull = studentCount >= classroom.capacity;
-                return (
-                  <TableRow key={classroom.id}>
-                    <TableCell className="font-medium">{classroom.name}</TableCell>
-                    <TableCell>{classroom.ageGroup}</TableCell>
-                    <TableCell>{getTeacherName(classroom.teacherId)}</TableCell>
-                    <TableCell>{studentCount}</TableCell>
-                    <TableCell>{classroom.capacity}</TableCell>
-                    <TableCell>
-                      <Badge variant={isFull ? "destructive" : "default"}>
-                        {isFull ? "Full" : "Available"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(classroom)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7}>
+                    <Skeleton className="h-10 w-full" />
+                  </TableCell>
+                </TableRow>
+              ) : filteredClassrooms.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    No classrooms found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredClassrooms.map((classroom) => {
+                  const studentCount = getStudentCount(classroom.id);
+                  const isFull = studentCount >= (classroom.capacity || 20);
+                  return (
+                    <TableRow key={classroom.id}>
+                      <TableCell className="font-medium">{classroom.name}</TableCell>
+                      <TableCell>{classroom.age_group || '—'}</TableCell>
+                      <TableCell>{getTeacherName(classroom.teacher_id)}</TableCell>
+                      <TableCell>{studentCount}</TableCell>
+                      <TableCell>{classroom.capacity || 20}</TableCell>
+                      <TableCell>
+                        <Badge variant={isFull ? "destructive" : "default"}>
+                          {isFull ? "Full" : "Available"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(classroom)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Delete Classroom</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              Are you sure you want to delete <strong>{selectedClassroom?.name}</strong>? This action cannot be undone.
+            </p>
+            {selectedClassroom && getStudentCount(selectedClassroom.id) > 0 && (
+              <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                  ⚠️ This classroom has {getStudentCount(selectedClassroom.id)} students assigned. Please reassign them first.
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDelete}
+              disabled={deleteClassroom.isPending}
+            >
+              Delete Classroom
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

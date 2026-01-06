@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageHeader } from "@/components/ui/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,8 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -26,7 +27,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { mockUsers, mockClassrooms, mockChildren, User, UserRole } from "@/lib/mockData";
+import { useUsers, useUpdateUser, useDeactivateUser, User } from "@/hooks/useUsers";
+import { useClassrooms } from "@/hooks/useClassrooms";
+import { useCreateUser, useAdminResetPassword } from "@/hooks/useAdminUsers";
 import {
   Users,
   UserPlus,
@@ -42,10 +45,12 @@ import {
   Filter,
   CheckCircle2,
   XCircle,
-  UserCog,
 } from "lucide-react";
+import { toast } from "sonner";
 
-const getRoleBadgeColor = (role: UserRole) => {
+type UserRole = 'admin' | 'teacher' | 'parent';
+
+const getRoleBadgeColor = (role: string) => {
   switch (role) {
     case "admin":
       return "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400";
@@ -58,7 +63,7 @@ const getRoleBadgeColor = (role: UserRole) => {
   }
 };
 
-const getRoleIcon = (role: UserRole) => {
+const getRoleIcon = (role: string) => {
   switch (role) {
     case "admin":
       return <Shield className="h-4 w-4" />;
@@ -80,19 +85,26 @@ const UserManagementPage = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState("all");
 
-  // Form state for create/edit
   const [formData, setFormData] = useState({
-    name: "",
+    full_name: "",
     email: "",
     phone: "",
+    password: "",
     role: "parent" as UserRole,
-    isActive: true,
+    is_active: true,
   });
 
+  const { data: users = [], isLoading } = useUsers();
+  const { data: classrooms = [] } = useClassrooms();
+  const createUser = useCreateUser();
+  const updateUser = useUpdateUser();
+  const deactivateUser = useDeactivateUser();
+  const resetPassword = useAdminResetPassword();
+
   // Filter users based on search and role
-  const filteredUsers = mockUsers.filter((user) => {
+  const filteredUsers = users.filter((user) => {
     const matchesSearch =
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
     const matchesTab = activeTab === "all" || user.role === activeTab;
@@ -101,42 +113,77 @@ const UserManagementPage = () => {
 
   // Stats
   const stats = {
-    total: mockUsers.length,
-    admins: mockUsers.filter((u) => u.role === "admin").length,
-    teachers: mockUsers.filter((u) => u.role === "teacher").length,
-    parents: mockUsers.filter((u) => u.role === "parent").length,
+    total: users.length,
+    admins: users.filter((u) => u.role === "admin").length,
+    teachers: users.filter((u) => u.role === "teacher").length,
+    parents: users.filter((u) => u.role === "parent").length,
   };
 
-  const handleCreateUser = () => {
-    console.log("Creating user:", formData);
-    setIsCreateDialogOpen(false);
-    resetForm();
+  const handleCreateUser = async () => {
+    try {
+      await createUser.mutateAsync({
+        email: formData.email,
+        password: formData.password,
+        full_name: formData.full_name,
+        role: formData.role,
+        phone: formData.phone || undefined,
+      });
+      toast.success("User created successfully");
+      setIsCreateDialogOpen(false);
+      resetForm();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create user");
+    }
   };
 
-  const handleEditUser = () => {
-    console.log("Updating user:", selectedUser?.id, formData);
-    setIsEditDialogOpen(false);
-    resetForm();
+  const handleEditUser = async () => {
+    if (!selectedUser) return;
+    try {
+      await updateUser.mutateAsync({
+        id: selectedUser.id,
+        full_name: formData.full_name,
+        phone: formData.phone || null,
+        role: formData.role,
+        is_active: formData.is_active,
+      });
+      toast.success("User updated successfully");
+      setIsEditDialogOpen(false);
+      resetForm();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update user");
+    }
   };
 
-  const handleDeleteUser = () => {
-    console.log("Deleting user:", selectedUser?.id);
-    setIsDeleteDialogOpen(false);
-    setSelectedUser(null);
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+    try {
+      await deactivateUser.mutateAsync(selectedUser.id);
+      toast.success("User deactivated successfully");
+      setIsDeleteDialogOpen(false);
+      setSelectedUser(null);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to deactivate user");
+    }
   };
 
-  const handleResetPassword = (userId: string) => {
-    console.log("Resetting password for user:", userId);
+  const handleResetPassword = async (email: string) => {
+    try {
+      await resetPassword.mutateAsync(email);
+      toast.success("Password reset email sent");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to send reset email");
+    }
   };
 
   const openEditDialog = (user: User) => {
     setSelectedUser(user);
     setFormData({
-      name: user.name,
+      full_name: user.full_name,
       email: user.email,
       phone: user.phone || "",
-      role: user.role,
-      isActive: true,
+      password: "",
+      role: user.role as UserRole,
+      is_active: user.is_active ?? true,
     });
     setIsEditDialogOpen(true);
   };
@@ -148,24 +195,23 @@ const UserManagementPage = () => {
 
   const resetForm = () => {
     setFormData({
-      name: "",
+      full_name: "",
       email: "",
       phone: "",
+      password: "",
       role: "parent",
-      isActive: true,
+      is_active: true,
     });
     setSelectedUser(null);
   };
 
-  // Get additional info for users
   const getUserDetails = (user: User) => {
     if (user.role === "teacher") {
-      const classroom = mockClassrooms.find((c) => c.teacherId === user.id);
-      return classroom ? `${classroom.name} (${classroom.studentCount} students)` : "No classroom assigned";
+      const classroom = classrooms.find((c) => c.teacher_id === user.id);
+      return classroom ? `${classroom.name}` : "No classroom assigned";
     }
     if (user.role === "parent") {
-      const children = mockChildren.filter((c) => c.parentIds.includes(user.id));
-      return children.length > 0 ? children.map((c) => c.name).join(", ") : "No children linked";
+      return "Parent account";
     }
     return "System Administrator";
   };
@@ -180,50 +226,62 @@ const UserManagementPage = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-                <p className="text-sm text-muted-foreground">Total Users</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 bg-purple-100 dark:bg-purple-900/40 rounded-lg">
-                <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">{stats.admins}</p>
-                <p className="text-sm text-purple-600 dark:text-purple-500">Admins</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                <GraduationCap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.teachers}</p>
-                <p className="text-sm text-blue-600 dark:text-blue-500">Teachers</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 bg-green-100 dark:bg-green-900/40 rounded-lg">
-                <Baby className="h-5 w-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-green-700 dark:text-green-400">{stats.parents}</p>
-                <p className="text-sm text-green-600 dark:text-green-500">Parents</p>
-              </div>
-            </CardContent>
-          </Card>
+          {isLoading ? (
+            [1, 2, 3, 4].map((i) => (
+              <Card key={i}>
+                <CardContent className="p-4">
+                  <Skeleton className="h-16 w-full" />
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <>
+              <Card>
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <Users className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{stats.total}</p>
+                    <p className="text-sm text-muted-foreground">Total Users</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 dark:bg-purple-900/40 rounded-lg">
+                    <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">{stats.admins}</p>
+                    <p className="text-sm text-purple-600 dark:text-purple-500">Admins</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                    <GraduationCap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.teachers}</p>
+                    <p className="text-sm text-blue-600 dark:text-blue-500">Teachers</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="p-2 bg-green-100 dark:bg-green-900/40 rounded-lg">
+                    <Baby className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-400">{stats.parents}</p>
+                    <p className="text-sm text-green-600 dark:text-green-500">Parents</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
 
         {/* Filters and Actions */}
@@ -267,8 +325,8 @@ const UserManagementPage = () => {
                   <Label>Full Name</Label>
                   <Input
                     placeholder="John Doe"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    value={formData.full_name}
+                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                   />
                 </div>
                 <div>
@@ -278,6 +336,15 @@ const UserManagementPage = () => {
                     placeholder="john@example.com"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Password</Label>
+                  <Input
+                    type="password"
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   />
                 </div>
                 <div>
@@ -319,19 +386,17 @@ const UserManagementPage = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-center justify-between">
-                  <Label>Account Active</Label>
-                  <Switch
-                    checked={formData.isActive}
-                    onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
-                  />
-                </div>
               </div>
               <DialogFooter className="mt-4">
                 <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleCreateUser}>Create User</Button>
+                <Button 
+                  onClick={handleCreateUser}
+                  disabled={!formData.full_name || !formData.email || !formData.password || createUser.isPending}
+                >
+                  Create User
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -361,7 +426,13 @@ const UserManagementPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredUsers.length === 0 ? (
+                    {isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={6}>
+                          <Skeleton className="h-16 w-full" />
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredUsers.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                           <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
@@ -374,16 +445,15 @@ const UserManagementPage = () => {
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <Avatar className="h-10 w-10">
-                                <AvatarImage src={user.avatar} />
                                 <AvatarFallback className="bg-primary/10 text-primary">
-                                  {user.name
+                                  {user.full_name
                                     .split(" ")
                                     .map((n) => n[0])
                                     .join("")}
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                <p className="font-medium text-foreground">{user.name}</p>
+                                <p className="font-medium text-foreground">{user.full_name}</p>
                                 <p className="text-sm text-muted-foreground">{user.email}</p>
                               </div>
                             </div>
@@ -401,9 +471,21 @@ const UserManagementPage = () => {
                             <p className="text-sm text-muted-foreground">{user.phone || "—"}</p>
                           </TableCell>
                           <TableCell className="hidden lg:table-cell">
-                            <Badge variant="outline" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
-                              Active
+                            <Badge variant="outline" className={user.is_active 
+                              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                              : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                            }>
+                              {user.is_active ? (
+                                <>
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Active
+                                </>
+                              ) : (
+                                <>
+                                  <XCircle className="h-3 w-3 mr-1" />
+                                  Inactive
+                                </>
+                              )}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
@@ -418,7 +500,7 @@ const UserManagementPage = () => {
                                   <Edit className="h-4 w-4 mr-2" />
                                   Edit User
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleResetPassword(user.id)}>
+                                <DropdownMenuItem onClick={() => handleResetPassword(user.email)}>
                                   <Key className="h-4 w-4 mr-2" />
                                   Reset Password
                                 </DropdownMenuItem>
@@ -432,7 +514,7 @@ const UserManagementPage = () => {
                                   onClick={() => openDeleteDialog(user)}
                                 >
                                   <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete User
+                                  Deactivate User
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -458,8 +540,8 @@ const UserManagementPage = () => {
             <div>
               <Label>Full Name</Label>
               <Input
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                value={formData.full_name}
+                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
               />
             </div>
             <div>
@@ -467,8 +549,10 @@ const UserManagementPage = () => {
               <Input
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                disabled
+                className="bg-muted"
               />
+              <p className="text-xs text-muted-foreground mt-1">Email cannot be changed</p>
             </div>
             <div>
               <Label>Phone Number</Label>
@@ -496,8 +580,8 @@ const UserManagementPage = () => {
             <div className="flex items-center justify-between">
               <Label>Account Active</Label>
               <Switch
-                checked={formData.isActive}
-                onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+                checked={formData.is_active}
+                onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
               />
             </div>
           </div>
@@ -505,7 +589,9 @@ const UserManagementPage = () => {
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleEditUser}>Save Changes</Button>
+            <Button onClick={handleEditUser} disabled={updateUser.isPending}>
+              Save Changes
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -514,23 +600,24 @@ const UserManagementPage = () => {
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-destructive">Delete User</DialogTitle>
+            <DialogTitle className="text-destructive">Deactivate User</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-muted-foreground">
-              Are you sure you want to delete <strong>{selectedUser?.name}</strong>? This action cannot be undone.
+              Are you sure you want to deactivate <strong>{selectedUser?.full_name}</strong>? 
+              They will no longer be able to log in.
             </p>
             {selectedUser?.role === "teacher" && (
               <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
                 <p className="text-sm text-yellow-700 dark:text-yellow-400">
-                  ⚠️ This teacher may have students assigned. Please reassign students before deleting.
+                  ⚠️ This teacher may have a classroom assigned. Please reassign students before deactivating.
                 </p>
               </div>
             )}
             {selectedUser?.role === "parent" && (
               <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
                 <p className="text-sm text-yellow-700 dark:text-yellow-400">
-                  ⚠️ This parent has children linked. Deleting will remove access to child information.
+                  ⚠️ This parent has children linked. Deactivating will remove their access to child information.
                 </p>
               </div>
             )}
@@ -539,8 +626,8 @@ const UserManagementPage = () => {
             <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteUser}>
-              Delete User
+            <Button variant="destructive" onClick={handleDeleteUser} disabled={deactivateUser.isPending}>
+              Deactivate User
             </Button>
           </DialogFooter>
         </DialogContent>
