@@ -8,20 +8,17 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAnnouncements } from '@/hooks/useAnnouncements';
+import { useUsers } from '@/hooks/useUsers';
+import { useChildren } from '@/hooks/useChildren';
+import { useChildParents } from '@/hooks/useChildParent';
+import { useClassrooms } from '@/hooks/useClassrooms';
 import { 
-  mockAnnouncements, 
-  getUserById,
-  getChildrenByParent,
-  getClassroomById,
-  Announcement 
-} from '@/lib/mockData';
-import { 
-  Bell,
   Pin,
   Calendar as CalendarIcon,
   Download,
-  Eye,
-  EyeOff,
   Filter,
   AlertCircle,
   Megaphone,
@@ -29,102 +26,69 @@ import {
 } from 'lucide-react';
 import { format, parseISO, isSameDay } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 const ParentAnnouncementsPage: React.FC = () => {
-  const children = getChildrenByParent('parent-1');
+  const { user } = useAuth();
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [audienceFilter, setAudienceFilter] = useState<string>('all');
-  const [readAnnouncements, setReadAnnouncements] = useState<Set<string>>(
-    new Set(['ann-1', 'ann-2'])
-  );
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
 
-  // Get classroom IDs for filtering
-  const classroomIds = new Set(children.map(c => c.classroomId));
+  const { data: users = [] } = useUsers();
+  const { data: children = [] } = useChildren();
+  const { data: childParentLinks = [] } = useChildParents();
+  const { data: classrooms = [] } = useClassrooms();
 
-  // Extended announcements
-  const allAnnouncements: Announcement[] = [
-    ...mockAnnouncements,
-    {
-      id: 'ann-4',
-      title: 'Parent-Teacher Conference',
-      content: 'Please sign up for your preferred time slot for the upcoming parent-teacher conferences on January 15th.',
-      authorId: 'admin-1',
-      targetAudience: 'all_parents',
-      priority: 'high',
-      eventDate: '2025-01-15',
-      isPinned: false,
-      createdAt: '2024-12-28',
-      readBy: []
-    },
-    {
-      id: 'ann-5',
-      title: 'Art Show Next Week',
-      content: 'Join us for our annual Winter Art Show showcasing your childrens creative work!',
-      authorId: 'teacher-1',
-      targetAudience: 'my_classroom',
-      priority: 'normal',
-      eventDate: '2025-01-08',
-      isPinned: false,
-      createdAt: '2024-12-27',
-      readBy: []
-    }
-  ];
+  // Get parent's children's classroom IDs
+  const parentChildren = children.filter(child => 
+    childParentLinks.some(cp => cp.parent_id === user?.id && cp.child_id === child.id)
+  );
+  const classroomIds = parentChildren.map(c => c.classroom_id).filter(Boolean);
+  
+  // Get announcements for those classrooms
+  const { data: announcements = [], isLoading } = useAnnouncements();
 
-  const filteredAnnouncements = allAnnouncements
+  // Filter announcements relevant to parent
+  const relevantAnnouncements = announcements.filter(ann => 
+    ann.classroom_id === null || classroomIds.includes(ann.classroom_id)
+  );
+
+  const filteredAnnouncements = relevantAnnouncements
     .filter(ann => {
       const matchesPriority = priorityFilter === 'all' || ann.priority === priorityFilter;
-      const matchesAudience = audienceFilter === 'all' || 
-        ann.targetAudience === 'everyone' || 
-        ann.targetAudience === 'all_parents' ||
-        (ann.targetAudience === 'my_classroom');
       const matchesDate = !selectedDate || 
-        (ann.eventDate && isSameDay(parseISO(ann.eventDate), selectedDate));
-      return matchesPriority && matchesAudience && matchesDate;
+        (ann.event_date && isSameDay(parseISO(ann.event_date), selectedDate));
+      return matchesPriority && matchesDate;
     })
     .sort((a, b) => {
-      // Pinned first
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
-      // Then by date
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
+      return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
     });
 
-  const pinnedAnnouncements = filteredAnnouncements.filter(a => a.isPinned);
-  const regularAnnouncements = filteredAnnouncements.filter(a => !a.isPinned);
-
-  const eventsWithDates = allAnnouncements.filter(a => a.eventDate);
+  const pinnedAnnouncements = filteredAnnouncements.filter(a => a.is_pinned);
+  const regularAnnouncements = filteredAnnouncements.filter(a => !a.is_pinned);
+  const eventsWithDates = relevantAnnouncements.filter(a => a.event_date);
 
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase();
 
-  const getPriorityColor = (priority: string) => {
-    const colors = {
+  const getPriorityColor = (priority: string | null) => {
+    const colors: Record<string, string> = {
       low: 'bg-muted text-muted-foreground',
       normal: 'bg-primary/10 text-primary',
       high: 'bg-destructive/10 text-destructive'
     };
-    return colors[priority as keyof typeof colors] || colors.normal;
+    return colors[priority || 'normal'] || colors.normal;
   };
 
-  const getPriorityIcon = (priority: string) => {
-    if (priority === 'high') return <AlertCircle className="h-4 w-4" />;
-    return null;
+  const getAuthorName = (authorId: string) => {
+    const author = users.find(u => u.id === authorId);
+    return author?.full_name || 'Unknown';
   };
 
-  const handleMarkAsRead = (annId: string) => {
-    setReadAnnouncements(prev => new Set([...prev, annId]));
+  const handleExportEvent = (ann: any) => {
+    toast.success(`"${ann.title}" added to calendar`);
   };
-
-  const handleExportEvent = (ann: Announcement) => {
-    toast({
-      title: "Event exported",
-      description: `"${ann.title}" has been added to your calendar.`
-    });
-  };
-
-  const unreadCount = allAnnouncements.filter(a => !readAnnouncements.has(a.id)).length;
 
   return (
     <DashboardLayout>
@@ -154,21 +118,6 @@ const ParentAnnouncementsPage: React.FC = () => {
                   <SelectItem value="low">Low</SelectItem>
                 </SelectContent>
               </Select>
-
-              <Select value={audienceFilter} onValueChange={setAudienceFilter}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="my_classroom">My Classroom</SelectItem>
-                  <SelectItem value="all_parents">General</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {unreadCount > 0 && (
-                <Badge className="bg-primary">{unreadCount} unread</Badge>
-              )}
             </div>
 
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'list' | 'calendar')}>
@@ -187,7 +136,17 @@ const ParentAnnouncementsPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {viewMode === 'list' ? (
+      {isLoading ? (
+        <div className="space-y-4">
+          {[1, 2, 3].map(i => (
+            <Card key={i} className="shadow-card">
+              <CardContent className="p-6">
+                <Skeleton className="h-24 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : viewMode === 'list' ? (
         <div className="space-y-6">
           {/* Pinned Announcements */}
           {pinnedAnnouncements.length > 0 && (
@@ -200,12 +159,10 @@ const ParentAnnouncementsPage: React.FC = () => {
                 <AnnouncementCard 
                   key={ann.id}
                   announcement={ann}
-                  isRead={readAnnouncements.has(ann.id)}
-                  onMarkAsRead={() => handleMarkAsRead(ann.id)}
                   onExport={() => handleExportEvent(ann)}
                   getInitials={getInitials}
                   getPriorityColor={getPriorityColor}
-                  getPriorityIcon={getPriorityIcon}
+                  getAuthorName={getAuthorName}
                 />
               ))}
             </div>
@@ -227,21 +184,18 @@ const ParentAnnouncementsPage: React.FC = () => {
                 <AnnouncementCard 
                   key={ann.id}
                   announcement={ann}
-                  isRead={readAnnouncements.has(ann.id)}
-                  onMarkAsRead={() => handleMarkAsRead(ann.id)}
                   onExport={() => handleExportEvent(ann)}
                   getInitials={getInitials}
                   getPriorityColor={getPriorityColor}
-                  getPriorityIcon={getPriorityIcon}
+                  getAuthorName={getAuthorName}
                 />
               ))
             )}
           </div>
         </div>
       ) : (
-        /* Calendar View - Responsive Layout */
+        /* Calendar View */
         <div className="space-y-6">
-          {/* Calendar - Full width on mobile, side panel on desktop */}
           <Card className="shadow-card">
             <CardHeader>
               <CardTitle className="text-lg">Events Calendar</CardTitle>
@@ -253,7 +207,7 @@ const ParentAnnouncementsPage: React.FC = () => {
                 onSelect={setSelectedDate}
                 className="rounded-md border pointer-events-auto w-full max-w-[350px]"
                 modifiers={{
-                  hasEvent: eventsWithDates.map(e => parseISO(e.eventDate!))
+                  hasEvent: eventsWithDates.map(e => parseISO(e.event_date!))
                 }}
                 modifiersStyles={{
                   hasEvent: { 
@@ -289,8 +243,8 @@ const ParentAnnouncementsPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               {eventsWithDates
-                .filter(e => !selectedDate || isSameDay(parseISO(e.eventDate!), selectedDate))
-                .sort((a, b) => new Date(a.eventDate!).getTime() - new Date(b.eventDate!).getTime())
+                .filter(e => !selectedDate || isSameDay(parseISO(e.event_date!), selectedDate))
+                .sort((a, b) => new Date(a.event_date!).getTime() - new Date(b.event_date!).getTime())
                 .map(ann => (
                   <div key={ann.id} className="p-4 bg-muted rounded-xl mb-4 last:mb-0">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-2">
@@ -300,7 +254,7 @@ const ParentAnnouncementsPage: React.FC = () => {
                           <h3 className="font-semibold">{ann.title}</h3>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {format(parseISO(ann.eventDate!), 'EEEE, MMMM d, yyyy')}
+                          {format(parseISO(ann.event_date!), 'EEEE, MMMM d, yyyy')}
                         </p>
                       </div>
                       <Button 
@@ -316,7 +270,7 @@ const ParentAnnouncementsPage: React.FC = () => {
                     <p className="text-sm text-foreground">{ann.content}</p>
                   </div>
                 ))}
-              {eventsWithDates.filter(e => !selectedDate || isSameDay(parseISO(e.eventDate!), selectedDate)).length === 0 && (
+              {eventsWithDates.filter(e => !selectedDate || isSameDay(parseISO(e.event_date!), selectedDate)).length === 0 && (
                 <p className="text-center text-muted-foreground py-8">
                   No events {selectedDate ? 'on this date' : 'scheduled'}.
                 </p>
@@ -331,31 +285,25 @@ const ParentAnnouncementsPage: React.FC = () => {
 
 // Announcement Card Component
 interface AnnouncementCardProps {
-  announcement: Announcement;
-  isRead: boolean;
-  onMarkAsRead: () => void;
+  announcement: any;
   onExport: () => void;
   getInitials: (name: string) => string;
-  getPriorityColor: (priority: string) => string;
-  getPriorityIcon: (priority: string) => React.ReactNode;
+  getPriorityColor: (priority: string | null) => string;
+  getAuthorName: (authorId: string) => string;
 }
 
 const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
   announcement,
-  isRead,
-  onMarkAsRead,
   onExport,
   getInitials,
   getPriorityColor,
-  getPriorityIcon
+  getAuthorName
 }) => {
-  const author = getUserById(announcement.authorId);
-
   return (
-    <Card className={cn('shadow-card', !isRead && 'border-l-4 border-l-primary')}>
+    <Card className={cn('shadow-card', announcement.is_pinned && 'border-l-4 border-l-primary')}>
       <CardContent className="p-6">
         <div className="flex items-start gap-4">
-          {announcement.isPinned && (
+          {announcement.is_pinned && (
             <Pin className="h-5 w-5 text-primary flex-shrink-0 mt-1" />
           )}
           <div className="flex-1">
@@ -364,19 +312,16 @@ const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
                 <div className="flex items-center gap-2 mb-1">
                   <h3 className="font-semibold text-lg">{announcement.title}</h3>
                   <Badge className={getPriorityColor(announcement.priority)}>
-                    {getPriorityIcon(announcement.priority)}
-                    <span className="ml-1 capitalize">{announcement.priority}</span>
+                    {announcement.priority === 'high' && <AlertCircle className="h-3 w-3 mr-1" />}
+                    <span className="capitalize">{announcement.priority || 'normal'}</span>
                   </Badge>
-                  {!isRead && (
-                    <Badge className="bg-primary">New</Badge>
-                  )}
                 </div>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <span>{format(parseISO(announcement.createdAt), 'MMM d, yyyy')}</span>
-                  {announcement.eventDate && (
+                  <span>{format(new Date(announcement.created_at || ''), 'MMM d, yyyy')}</span>
+                  {announcement.event_date && (
                     <span className="flex items-center gap-1">
                       <CalendarIcon className="h-3 w-3" />
-                      Event: {format(parseISO(announcement.eventDate), 'MMM d, yyyy')}
+                      Event: {format(parseISO(announcement.event_date), 'MMM d, yyyy')}
                     </span>
                   )}
                 </div>
@@ -389,21 +334,15 @@ const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
               <div className="flex items-center gap-2">
                 <Avatar className="h-6 w-6">
                   <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                    {author ? getInitials(author.name) : '?'}
+                    {getInitials(getAuthorName(announcement.created_by))}
                   </AvatarFallback>
                 </Avatar>
                 <span className="text-sm text-muted-foreground">
-                  {author?.name}
+                  {getAuthorName(announcement.created_by)}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {!isRead && (
-                  <Button variant="ghost" size="sm" onClick={onMarkAsRead}>
-                    <Eye className="h-4 w-4 mr-1" />
-                    Mark as read
-                  </Button>
-                )}
-                {announcement.eventDate && (
+                {announcement.event_date && (
                   <Button variant="outline" size="sm" onClick={onExport}>
                     <Download className="h-4 w-4 mr-1" />
                     Add to Calendar

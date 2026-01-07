@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -6,85 +6,106 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUsers } from '@/hooks/useUsers';
+import { useChildren } from '@/hooks/useChildren';
+import { useChildParents } from '@/hooks/useChildParent';
+import { useClassrooms } from '@/hooks/useClassrooms';
 import { 
-  mockMessages, 
-  mockUsers, 
-  getUserById, 
-  getChildrenByParent, 
-  getChildById,
-  getClassroomById,
-  mockClassrooms
-} from '@/lib/mockData';
-import { Send, Search, Check, CheckCheck, Filter, Plus } from 'lucide-react';
+  useConversation, 
+  useSendMessage, 
+  useMarkConversationAsRead 
+} from '@/hooks/useMessages';
+import { supabase } from '@/integrations/supabase/client';
+import { Send, Search, Check, CheckCheck, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format, parseISO } from 'date-fns';
-import { toast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 const ParentMessagesPage: React.FC = () => {
-  const [selectedConvo, setSelectedConvo] = useState<string | null>('teacher-1');
+  const { user } = useAuth();
+  const [selectedConvo, setSelectedConvo] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [childFilter, setChildFilter] = useState<string>('all');
-  const [messages, setMessages] = useState(mockMessages);
 
-  const children = getChildrenByParent('parent-1');
-  
+  const { data: users = [] } = useUsers();
+  const { data: children = [] } = useChildren();
+  const { data: childParentLinks = [] } = useChildParents();
+  const { data: classrooms = [] } = useClassrooms();
+  const { data: messages = [], refetch: refetchMessages } = useConversation(user?.id, selectedConvo || undefined);
+  const sendMessage = useSendMessage();
+  const markAsRead = useMarkConversationAsRead();
+
+  // Get parent's children
+  const parentChildren = children.filter(child => 
+    childParentLinks.some(cp => cp.parent_id === user?.id && cp.child_id === child.id)
+  );
+
   // Get teachers from children's classrooms
   const teacherIds = new Set(
-    children.map(c => getClassroomById(c.classroomId)?.teacherId).filter(Boolean)
+    parentChildren.map(c => {
+      const classroom = classrooms.find(cl => cl.id === c.classroom_id);
+      return classroom?.teacher_id;
+    }).filter(Boolean)
   );
-  const teachers = mockUsers.filter(u => teacherIds.has(u.id));
+  const teachers = users.filter(u => teacherIds.has(u.id));
 
-  // Get conversations (messages grouped by teacher)
-  const conversations = teachers.map(teacher => {
-    const teacherMessages = messages.filter(
-      m => m.senderId === teacher.id || m.recipientId === teacher.id
-    );
-    const lastMessage = teacherMessages[teacherMessages.length - 1];
-    const unreadCount = teacherMessages.filter(
-      m => m.senderId === teacher.id && !m.read
-    ).length;
+  // Mark conversation as read when selected
+  useEffect(() => {
+    if (selectedConvo && user?.id) {
+      markAsRead.mutate({ userId: user.id, otherUserId: selectedConvo });
+    }
+  }, [selectedConvo, user?.id]);
 
-    return {
-      teacher,
-      lastMessage,
-      unreadCount
+  // Subscribe to real-time messages
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel('parent-messages-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `recipient_id=eq.${user.id}`,
+        },
+        () => {
+          refetchMessages();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
     };
-  });
-
-  // Filter messages for selected conversation
-  const conversationMessages = messages.filter(
-    m => m.senderId === selectedConvo || m.recipientId === selectedConvo
-  ).filter(m => 
-    childFilter === 'all' || m.childId === childFilter
-  ).filter(m =>
-    searchQuery === '' || m.content.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  }, [user?.id, refetchMessages]);
 
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase();
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedConvo) return;
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedConvo || !user?.id) return;
     
-    const newMsg = {
-      id: `msg-${Date.now()}`,
-      senderId: 'parent-1',
-      recipientId: selectedConvo,
-      content: newMessage,
-      timestamp: new Date().toISOString(),
-      read: false
-    };
-    
-    setMessages(prev => [...prev, newMsg]);
-    setNewMessage('');
-    toast({
-      title: "Message sent",
-      description: "Your message has been delivered."
-    });
+    try {
+      await sendMessage.mutateAsync({
+        sender_id: user.id,
+        recipient_id: selectedConvo,
+        content: newMessage,
+      });
+      setNewMessage('');
+      refetchMessages();
+      toast.success('Message sent');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to send message');
+    }
   };
 
-  const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
+  const filteredTeachers = teachers.filter(t =>
+    t.full_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const selectedUser = users.find(u => u.id === selectedConvo);
 
   return (
     <DashboardLayout>
@@ -99,9 +120,6 @@ const ParentMessagesPage: React.FC = () => {
           <div className="p-4 border-b space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">Inbox</h3>
-              {totalUnread > 0 && (
-                <Badge className="bg-primary">{totalUnread} unread</Badge>
-              )}
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -114,88 +132,61 @@ const ParentMessagesPage: React.FC = () => {
             </div>
           </div>
           <div className="overflow-y-auto flex-1">
-            {conversations.map(({ teacher, lastMessage, unreadCount }) => (
-              <button
-                key={teacher.id}
-                onClick={() => setSelectedConvo(teacher.id)}
-                className={cn(
-                  'w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left',
-                  selectedConvo === teacher.id && 'bg-primary/5 border-l-4 border-l-primary'
-                )}
-              >
-                <div className="relative">
+            {filteredTeachers.length === 0 ? (
+              <div className="p-4 text-center text-muted-foreground">
+                No teachers found
+              </div>
+            ) : (
+              filteredTeachers.map(teacher => (
+                <button
+                  key={teacher.id}
+                  onClick={() => setSelectedConvo(teacher.id)}
+                  className={cn(
+                    'w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left',
+                    selectedConvo === teacher.id && 'bg-primary/5 border-l-4 border-l-primary'
+                  )}
+                >
                   <Avatar>
                     <AvatarFallback className="bg-primary/10 text-primary">
-                      {getInitials(teacher.name)}
+                      {getInitials(teacher.full_name)}
                     </AvatarFallback>
                   </Avatar>
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 h-5 w-5 bg-primary text-primary-foreground text-xs rounded-full flex items-center justify-center">
-                      {unreadCount}
-                    </span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold truncate">{teacher.name}</p>
-                    {lastMessage && (
-                      <span className="text-xs text-muted-foreground">
-                        {format(parseISO(lastMessage.timestamp), 'h:mm a')}
-                      </span>
-                    )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">{teacher.full_name}</p>
+                    <p className="text-sm text-muted-foreground truncate">Teacher</p>
                   </div>
-                  <p className="text-sm text-muted-foreground truncate">
-                    {lastMessage?.content || 'No messages yet'}
-                  </p>
-                </div>
-              </button>
-            ))}
+                </button>
+              ))
+            )}
           </div>
         </Card>
 
         {/* Messages */}
         <Card className="lg:col-span-2 shadow-card flex flex-col">
-          {selectedConvo ? (
+          {selectedConvo && selectedUser ? (
             <>
               {/* Header */}
-              <div className="p-4 border-b flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarFallback className="bg-primary/10 text-primary">
-                      {getInitials(getUserById(selectedConvo)?.name || '')}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-semibold">{getUserById(selectedConvo)?.name}</p>
-                    <p className="text-xs text-muted-foreground">Teacher</p>
-                  </div>
+              <div className="p-4 border-b flex items-center gap-3">
+                <Avatar>
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    {getInitials(selectedUser.full_name)}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-semibold">{selectedUser.full_name}</p>
+                  <p className="text-xs text-muted-foreground">Teacher</p>
                 </div>
-                {children.length > 1 && (
-                  <Select value={childFilter} onValueChange={setChildFilter}>
-                    <SelectTrigger className="w-40">
-                      <Filter className="h-4 w-4 mr-2" />
-                      <SelectValue placeholder="Filter by child" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Children</SelectItem>
-                      {children.map(child => (
-                        <SelectItem key={child.id} value={child.id}>{child.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
               </div>
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {conversationMessages.length === 0 ? (
+                {messages.length === 0 ? (
                   <div className="text-center text-muted-foreground py-8">
                     No messages yet. Start a conversation!
                   </div>
                 ) : (
-                  conversationMessages.map(msg => {
-                    const isOwn = msg.senderId !== selectedConvo;
-                    const child = msg.childId ? getChildById(msg.childId) : null;
+                  messages.map(msg => {
+                    const isOwn = msg.sender_id === user?.id;
                     
                     return (
                       <div key={msg.id} className={cn('flex', isOwn ? 'justify-end' : 'justify-start')}>
@@ -205,24 +196,16 @@ const ParentMessagesPage: React.FC = () => {
                             ? 'bg-primary text-primary-foreground rounded-br-sm' 
                             : 'bg-muted rounded-bl-sm'
                         )}>
-                          {child && (
-                            <p className={cn(
-                              'text-xs mb-1',
-                              isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground'
-                            )}>
-                              Re: {child.name}
-                            </p>
-                          )}
                           <p className="text-sm">{msg.content}</p>
                           <div className={cn(
                             'flex items-center gap-1 justify-end mt-1',
                             isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground'
                           )}>
                             <span className="text-xs">
-                              {format(parseISO(msg.timestamp), 'h:mm a')}
+                              {format(new Date(msg.created_at || ''), 'h:mm a')}
                             </span>
                             {isOwn && (
-                              msg.read 
+                              msg.is_read 
                                 ? <CheckCheck className="h-3 w-3" />
                                 : <Check className="h-3 w-3" />
                             )}
@@ -236,21 +219,6 @@ const ParentMessagesPage: React.FC = () => {
 
               {/* Input */}
               <div className="p-4 border-t">
-                {children.length > 1 && (
-                  <div className="flex gap-2 mb-3">
-                    <span className="text-sm text-muted-foreground">About:</span>
-                    {children.map(child => (
-                      <Badge 
-                        key={child.id}
-                        variant="outline" 
-                        className="cursor-pointer hover:bg-primary/10"
-                        onClick={() => setNewMessage(prev => `[Re: ${child.name}] ${prev}`)}
-                      >
-                        {child.name}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
                 <div className="flex gap-2">
                   <Input
                     placeholder="Type a message..."
@@ -259,8 +227,11 @@ const ParentMessagesPage: React.FC = () => {
                     onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
                     className="flex-1"
                   />
-                  <Button onClick={handleSendMessage} disabled={!newMessage.trim()}>
-                    <Send className="h-4 w-4" />
+                  <Button 
+                    onClick={handleSendMessage} 
+                    disabled={!newMessage.trim() || sendMessage.isPending}
+                  >
+                    {sendMessage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>

@@ -1,91 +1,87 @@
 import React, { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader } from '@/components/ui/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  getChildrenByParent, 
-  mockDocuments, 
-  getChildById,
-  Document 
-} from '@/lib/mockData';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/contexts/AuthContext';
+import { useDocuments, useUploadDocument } from '@/hooks/useDocuments';
+import { useChildren } from '@/hooks/useChildren';
+import { useChildParents } from '@/hooks/useChildParent';
 import { 
   Upload,
   Download,
   Eye,
-  RefreshCw,
   CheckCircle,
   XCircle,
   AlertCircle,
   Clock,
   FileText,
   Filter,
-  AlertTriangle,
-  File,
-  Image as ImageIcon
+  Loader2
 } from 'lucide-react';
-import { DocumentUpload } from '@/components/ui/photo-upload';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 const DocumentsPortalPage: React.FC = () => {
-  const children = getChildrenByParent('parent-1');
+  const { user } = useAuth();
   const [selectedChild, setSelectedChild] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<any>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
 
-  const childIds = children.map(c => c.id);
+  const { data: children = [] } = useChildren();
+  const { data: childParentLinks = [] } = useChildParents();
+  const { data: documents = [], isLoading } = useDocuments();
+  const uploadDocument = useUploadDocument();
 
-  // Extended mock documents
-  const allDocuments: Document[] = [
-    ...mockDocuments,
-    { id: 'doc-7', childId: 'child-5', name: 'Birth Certificate', type: 'identification', status: 'approved', submittedDate: '2024-09-15' },
-    { id: 'doc-8', childId: 'child-5', name: 'Medical Insurance Card', type: 'medical', status: 'pending', dueDate: '2025-01-20' },
-    { id: 'doc-9', childId: 'child-1', name: 'Field Trip Permission', type: 'consent', status: 'pending', dueDate: '2025-01-05' },
-  ];
+  // Get parent's children
+  const parentChildIds = childParentLinks
+    .filter(cp => cp.parent_id === user?.id)
+    .map(cp => cp.child_id);
+  const parentChildren = children.filter(c => parentChildIds.includes(c.id));
 
-  const filteredDocuments = allDocuments.filter(doc => {
-    const matchesChild = selectedChild === 'all' ? childIds.includes(doc.childId) : doc.childId === selectedChild;
+  const childIds = selectedChild === 'all' 
+    ? parentChildIds 
+    : [selectedChild];
+
+  const filteredDocuments = documents.filter(doc => {
+    const matchesChild = childIds.includes(doc.child_id);
     const matchesStatus = statusFilter === 'all' || doc.status === statusFilter;
     return matchesChild && matchesStatus;
   });
 
-  const getStatusIcon = (status: string) => {
-    const icons = {
-      approved: <CheckCircle className="h-4 w-4 text-success" />,
-      pending: <Clock className="h-4 w-4 text-warning" />,
-      submitted: <AlertCircle className="h-4 w-4 text-primary" />,
-      rejected: <XCircle className="h-4 w-4 text-destructive" />,
-      expired: <AlertTriangle className="h-4 w-4 text-destructive" />
+  const getStatusIcon = (status: string | null) => {
+    const icons: Record<string, JSX.Element> = {
+      approved: <CheckCircle className="h-4 w-4 text-green-600" />,
+      pending: <Clock className="h-4 w-4 text-yellow-600" />,
+      submitted: <AlertCircle className="h-4 w-4 text-blue-600" />,
+      rejected: <XCircle className="h-4 w-4 text-red-600" />
     };
-    return icons[status as keyof typeof icons] || <File className="h-4 w-4" />;
+    return icons[status || 'pending'] || <FileText className="h-4 w-4" />;
   };
 
-  const getStatusBadge = (status: string) => {
-    const styles = {
-      approved: 'bg-success/10 text-success',
-      pending: 'bg-warning/10 text-warning',
-      submitted: 'bg-primary/10 text-primary',
-      rejected: 'bg-destructive/10 text-destructive',
-      expired: 'bg-destructive/10 text-destructive'
+  const getStatusBadge = (status: string | null) => {
+    const styles: Record<string, string> = {
+      approved: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+      pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+      submitted: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+      rejected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
     };
-    return styles[status as keyof typeof styles] || '';
+    return styles[status || 'pending'] || '';
   };
 
-  const getDueDateWarning = (dueDate?: string) => {
+  const getDueDateWarning = (dueDate?: string | null) => {
     if (!dueDate) return null;
     const days = differenceInDays(parseISO(dueDate), new Date());
     if (days < 0) return { text: 'Overdue', color: 'text-destructive' };
-    if (days <= 7) return { text: `Due in ${days} days`, color: 'text-warning' };
+    if (days <= 7) return { text: `Due in ${days} days`, color: 'text-yellow-600' };
     return null;
   };
 
@@ -93,47 +89,35 @@ const DocumentsPortalPage: React.FC = () => {
     pending: filteredDocuments.filter(d => d.status === 'pending').length,
     submitted: filteredDocuments.filter(d => d.status === 'submitted').length,
     approved: filteredDocuments.filter(d => d.status === 'approved').length,
-    expired: filteredDocuments.filter(d => d.status === 'expired' || d.status === 'rejected').length
+    rejected: filteredDocuments.filter(d => d.status === 'rejected').length
   };
 
-  const handleUpload = (doc: Document) => {
+  const handleUpload = (doc: any) => {
     setSelectedDocument(doc);
     setUploadDialogOpen(true);
   };
 
-  const handleSubmitUpload = () => {
-    if (!uploadFile) {
-      toast({
-        title: "No file selected",
-        description: "Please select a file to upload.",
-        variant: "destructive"
+  const handleSubmitUpload = async () => {
+    if (!uploadFile || !selectedDocument) return;
+    
+    try {
+      await uploadDocument.mutateAsync({
+        documentId: selectedDocument.id,
+        file: uploadFile,
+        childId: selectedDocument.child_id,
       });
-      return;
+      toast.success('Document uploaded successfully');
+      setUploadFile(null);
+      setUploadDialogOpen(false);
+      setSelectedDocument(null);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to upload document');
     }
-    toast({
-      title: "Document uploaded",
-      description: `${selectedDocument?.name} has been submitted for review.`
-    });
-    setUploadFile(null);
-    setUploadDialogOpen(false);
-    setSelectedDocument(null);
   };
 
-  const handlePreview = (doc: Document) => {
-    setSelectedDocument(doc);
-    setPreviewDialogOpen(true);
-  };
-
-  const handleDownload = (doc: Document) => {
-    toast({
-      title: "Downloading",
-      description: `${doc.name} is being downloaded.`
-    });
-  };
-
-  const handleResubmit = (doc: Document) => {
-    setSelectedDocument(doc);
-    setUploadDialogOpen(true);
+  const getChildName = (childId: string) => {
+    const child = children.find(c => c.id === childId);
+    return child ? `${child.first_name} ${child.last_name}` : 'Unknown';
   };
 
   return (
@@ -147,8 +131,8 @@ const DocumentsPortalPage: React.FC = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card className="shadow-card">
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-warning/10 rounded-xl">
-              <Clock className="h-6 w-6 text-warning" />
+            <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl">
+              <Clock className="h-6 w-6 text-yellow-600" />
             </div>
             <div>
               <p className="text-2xl font-bold">{stats.pending}</p>
@@ -158,8 +142,8 @@ const DocumentsPortalPage: React.FC = () => {
         </Card>
         <Card className="shadow-card">
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-primary/10 rounded-xl">
-              <AlertCircle className="h-6 w-6 text-primary" />
+            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+              <AlertCircle className="h-6 w-6 text-blue-600" />
             </div>
             <div>
               <p className="text-2xl font-bold">{stats.submitted}</p>
@@ -169,8 +153,8 @@ const DocumentsPortalPage: React.FC = () => {
         </Card>
         <Card className="shadow-card">
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-success/10 rounded-xl">
-              <CheckCircle className="h-6 w-6 text-success" />
+            <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl">
+              <CheckCircle className="h-6 w-6 text-green-600" />
             </div>
             <div>
               <p className="text-2xl font-bold">{stats.approved}</p>
@@ -180,12 +164,12 @@ const DocumentsPortalPage: React.FC = () => {
         </Card>
         <Card className="shadow-card">
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 bg-destructive/10 rounded-xl">
-              <XCircle className="h-6 w-6 text-destructive" />
+            <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-xl">
+              <XCircle className="h-6 w-6 text-red-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{stats.expired}</p>
-              <p className="text-sm text-muted-foreground">Action Needed</p>
+              <p className="text-2xl font-bold">{stats.rejected}</p>
+              <p className="text-sm text-muted-foreground">Rejected</p>
             </div>
           </CardContent>
         </Card>
@@ -206,8 +190,10 @@ const DocumentsPortalPage: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Children</SelectItem>
-                {children.map(child => (
-                  <SelectItem key={child.id} value={child.id}>{child.name}</SelectItem>
+                {parentChildren.map(child => (
+                  <SelectItem key={child.id} value={child.id}>
+                    {child.first_name} {child.last_name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -222,7 +208,6 @@ const DocumentsPortalPage: React.FC = () => {
                 <SelectItem value="submitted">Submitted</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
                 <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -232,15 +217,20 @@ const DocumentsPortalPage: React.FC = () => {
       {/* Documents List */}
       <Card className="shadow-card">
         <CardContent className="p-0">
-          {filteredDocuments.length === 0 ? (
+          {isLoading ? (
+            <div className="p-4 space-y-4">
+              {[1, 2, 3].map(i => (
+                <Skeleton key={i} className="h-20 w-full" />
+              ))}
+            </div>
+          ) : filteredDocuments.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-muted-foreground">No documents found.</p>
             </div>
           ) : (
             <div className="divide-y divide-border">
               {filteredDocuments.map(doc => {
-                const child = getChildById(doc.childId);
-                const warning = getDueDateWarning(doc.dueDate);
+                const warning = getDueDateWarning(doc.due_date);
 
                 return (
                   <div key={doc.id} className="p-4 flex flex-col lg:flex-row lg:items-center gap-4">
@@ -250,52 +240,47 @@ const DocumentsPortalPage: React.FC = () => {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold">{doc.name}</h3>
+                          <h3 className="font-semibold">{doc.document_type}</h3>
                           <Badge className={getStatusBadge(doc.status)}>
                             {getStatusIcon(doc.status)}
-                            <span className="ml-1 capitalize">{doc.status}</span>
+                            <span className="ml-1 capitalize">{doc.status || 'pending'}</span>
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {child?.name} • {doc.type}
+                          {getChildName(doc.child_id)}
                         </p>
-                        {doc.dueDate && (
+                        {doc.due_date && (
                           <p className={cn('text-sm', warning?.color)}>
-                            Due: {format(parseISO(doc.dueDate), 'MMM d, yyyy')}
+                            Due: {format(parseISO(doc.due_date), 'MMM d, yyyy')}
                             {warning && ` (${warning.text})`}
                           </p>
                         )}
-                        {doc.submittedDate && (
+                        {doc.submission_date && (
                           <p className="text-sm text-muted-foreground">
-                            Submitted: {format(parseISO(doc.submittedDate), 'MMM d, yyyy')}
+                            Submitted: {format(parseISO(doc.submission_date), 'MMM d, yyyy')}
                           </p>
-                        )}
-                        {doc.notes && (
-                          <p className="text-sm text-destructive mt-1">{doc.notes}</p>
                         )}
                       </div>
                     </div>
 
                     <div className="flex gap-2 flex-wrap lg:flex-nowrap">
-                      {(doc.status === 'pending' || doc.status === 'expired') && (
+                      {(doc.status === 'pending' || doc.status === 'rejected') && (
                         <Button onClick={() => handleUpload(doc)} className="gap-2">
                           <Upload className="h-4 w-4" />
                           Upload
                         </Button>
                       )}
-                      {doc.status === 'rejected' && (
-                        <Button onClick={() => handleResubmit(doc)} variant="outline" className="gap-2">
-                          <RefreshCw className="h-4 w-4" />
-                          Resubmit
-                        </Button>
-                      )}
-                      {(doc.status === 'submitted' || doc.status === 'approved') && (
+                      {(doc.status === 'submitted' || doc.status === 'approved') && doc.file_url && (
                         <>
-                          <Button variant="outline" size="icon" onClick={() => handlePreview(doc)}>
-                            <Eye className="h-4 w-4" />
+                          <Button variant="outline" size="icon" asChild>
+                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
+                              <Eye className="h-4 w-4" />
+                            </a>
                           </Button>
-                          <Button variant="outline" size="icon" onClick={() => handleDownload(doc)}>
-                            <Download className="h-4 w-4" />
+                          <Button variant="outline" size="icon" asChild>
+                            <a href={doc.file_url} download>
+                              <Download className="h-4 w-4" />
+                            </a>
                           </Button>
                         </>
                       )}
@@ -317,58 +302,29 @@ const DocumentsPortalPage: React.FC = () => {
           <div className="py-4">
             {selectedDocument && (
               <div className="mb-4 p-3 bg-muted rounded-lg">
-                <p className="font-medium">{selectedDocument.name}</p>
+                <p className="font-medium">{selectedDocument.document_type}</p>
                 <p className="text-sm text-muted-foreground">
-                  For: {getChildById(selectedDocument.childId)?.name}
+                  For: {getChildName(selectedDocument.child_id)}
                 </p>
               </div>
             )}
-            <DocumentUpload
-              file={uploadFile}
-              onFileChange={(file) => setUploadFile(file)}
+            <Input
+              type="file"
               accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
             />
+            <p className="text-sm text-muted-foreground mt-2">
+              Accepted formats: PDF, JPG, PNG, DOC, DOCX
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUploadDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmitUpload} disabled={!uploadFile}>Submit</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Preview Dialog */}
-      <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Document Preview</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            {selectedDocument && (
-              <div className="space-y-4">
-                <div className="p-4 bg-muted rounded-lg">
-                  <h3 className="font-semibold mb-2">{selectedDocument.name}</h3>
-                  <p className="text-sm text-muted-foreground">Type: {selectedDocument.type}</p>
-                  <p className="text-sm text-muted-foreground">
-                    Status: <span className="capitalize">{selectedDocument.status}</span>
-                  </p>
-                  {selectedDocument.submittedDate && (
-                    <p className="text-sm text-muted-foreground">
-                      Submitted: {format(parseISO(selectedDocument.submittedDate), 'MMM d, yyyy')}
-                    </p>
-                  )}
-                </div>
-                <div className="aspect-[4/3] bg-muted rounded-lg flex items-center justify-center">
-                  <FileText className="h-16 w-16 text-muted-foreground" />
-                  <span className="ml-2 text-muted-foreground">Document Preview</span>
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPreviewDialogOpen(false)}>Close</Button>
-            <Button onClick={() => selectedDocument && handleDownload(selectedDocument)} className="gap-2">
-              <Download className="h-4 w-4" />
-              Download
+            <Button 
+              onClick={handleSubmitUpload} 
+              disabled={!uploadFile || uploadDocument.isPending}
+            >
+              {uploadDocument.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Submit
             </Button>
           </DialogFooter>
         </DialogContent>
