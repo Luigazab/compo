@@ -1,23 +1,107 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
-import { mockMessages, mockUsers, getUserById } from '@/lib/mockData';
-import { Send, Search } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUsers } from '@/hooks/useUsers';
+import { 
+  useConversation, 
+  useSendMessage, 
+  useMarkConversationAsRead 
+} from '@/hooks/useMessages';
+import { supabase } from '@/integrations/supabase/client';
+import { Send, Search, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
 const MessagesPage: React.FC = () => {
-  const [selectedConvo, setSelectedConvo] = useState<string | null>('parent-1');
+  const { user } = useAuth();
+  const [selectedConvo, setSelectedConvo] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [conversations, setConversations] = useState<any[]>([]);
 
-  const conversations = mockUsers.filter(u => u.role === 'parent').slice(0, 3);
-  const messages = mockMessages.filter(m => m.senderId === selectedConvo || m.recipientId === selectedConvo);
+  const { data: users = [] } = useUsers();
+  const { data: messages = [], refetch: refetchMessages } = useConversation(user?.id, selectedConvo || undefined);
+  const sendMessage = useSendMessage();
+  const markAsRead = useMarkConversationAsRead();
+
+  // Get conversations (users who have exchanged messages with current user)
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchConversations = async () => {
+      // Get all users except current user who are relevant (parents for teachers, teachers for parents)
+      const relevantUsers = users.filter(u => {
+        if (user.role === 'teacher' || user.role === 'admin') {
+          return u.role === 'parent';
+        }
+        return u.role === 'teacher' || u.role === 'admin';
+      });
+      setConversations(relevantUsers);
+    };
+
+    fetchConversations();
+  }, [user, users]);
+
+  // Mark conversation as read when selected
+  useEffect(() => {
+    if (selectedConvo && user?.id) {
+      markAsRead.mutate({ userId: user.id, otherUserId: selectedConvo });
+    }
+  }, [selectedConvo, user?.id]);
+
+  // Subscribe to real-time messages
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel('messages-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `recipient_id=eq.${user.id}`,
+        },
+        () => {
+          refetchMessages();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, refetchMessages]);
 
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase();
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedConvo || !user?.id) return;
+    
+    try {
+      await sendMessage.mutateAsync({
+        sender_id: user.id,
+        recipient_id: selectedConvo,
+        content: newMessage,
+      });
+      setNewMessage('');
+      refetchMessages();
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    }
+  };
+
+  const filteredConversations = conversations.filter(c =>
+    c.full_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const selectedUser = users.find(u => u.id === selectedConvo);
 
   return (
     <DashboardLayout>
@@ -29,63 +113,87 @@ const MessagesPage: React.FC = () => {
           <div className="p-4 border-b">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search messages..." className="pl-10" />
+              <Input 
+                placeholder="Search messages..." 
+                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
           </div>
           <div className="overflow-y-auto">
-            {conversations.map(user => (
-              <button
-                key={user.id}
-                onClick={() => setSelectedConvo(user.id)}
-                className={cn(
-                  'w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left',
-                  selectedConvo === user.id && 'bg-primary/5 border-l-4 border-l-primary'
-                )}
-              >
-                <Avatar><AvatarFallback className="bg-primary/10 text-primary">{getInitials(user.name)}</AvatarFallback></Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">{user.name}</p>
-                  <p className="text-sm text-muted-foreground truncate">Click to view messages</p>
-                </div>
-              </button>
-            ))}
+            {filteredConversations.length === 0 ? (
+              <div className="p-4 text-center text-muted-foreground">
+                No conversations found
+              </div>
+            ) : (
+              filteredConversations.map(convoUser => (
+                <button
+                  key={convoUser.id}
+                  onClick={() => setSelectedConvo(convoUser.id)}
+                  className={cn(
+                    'w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left',
+                    selectedConvo === convoUser.id && 'bg-primary/5 border-l-4 border-l-primary'
+                  )}
+                >
+                  <Avatar><AvatarFallback className="bg-primary/10 text-primary">{getInitials(convoUser.full_name)}</AvatarFallback></Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">{convoUser.full_name}</p>
+                    <p className="text-sm text-muted-foreground truncate capitalize">{convoUser.role}</p>
+                  </div>
+                </button>
+              ))
+            )}
           </div>
         </Card>
 
         {/* Messages */}
         <Card className="lg:col-span-2 shadow-card flex flex-col">
-          {selectedConvo ? (
+          {selectedConvo && selectedUser ? (
             <>
               <div className="p-4 border-b flex items-center gap-3">
-                <Avatar><AvatarFallback className="bg-primary/10 text-primary">{getInitials(getUserById(selectedConvo)?.name || '')}</AvatarFallback></Avatar>
+                <Avatar><AvatarFallback className="bg-primary/10 text-primary">{getInitials(selectedUser.full_name)}</AvatarFallback></Avatar>
                 <div>
-                  <p className="font-semibold">{getUserById(selectedConvo)?.name}</p>
-                  <p className="text-xs text-muted-foreground">Parent</p>
+                  <p className="font-semibold">{selectedUser.full_name}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{selectedUser.role}</p>
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map(msg => {
-                  const isOwn = msg.senderId !== selectedConvo;
-                  return (
-                    <div key={msg.id} className={cn('flex', isOwn ? 'justify-end' : 'justify-start')}>
-                      <div className={cn('max-w-[70%] p-3 rounded-2xl', isOwn ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted rounded-bl-sm')}>
-                        <p className="text-sm">{msg.content}</p>
-                        <p className={cn('text-xs mt-1', isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
-                          {format(new Date(msg.timestamp), 'h:mm a')}
-                        </p>
+                {messages.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8">
+                    No messages yet. Start the conversation!
+                  </div>
+                ) : (
+                  messages.map(msg => {
+                    const isOwn = msg.sender_id === user?.id;
+                    return (
+                      <div key={msg.id} className={cn('flex', isOwn ? 'justify-end' : 'justify-start')}>
+                        <div className={cn('max-w-[70%] p-3 rounded-2xl', isOwn ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted rounded-bl-sm')}>
+                          <p className="text-sm">{msg.content}</p>
+                          <p className={cn('text-xs mt-1', isOwn ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+                            {format(new Date(msg.created_at || ''), 'h:mm a')}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
               <div className="p-4 border-t flex gap-2">
                 <Input
                   placeholder="Type a message..."
                   value={newMessage}
                   onChange={e => setNewMessage(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
                   className="flex-1"
                 />
-                <Button className="gap-2"><Send className="h-4 w-4" /></Button>
+                <Button 
+                  className="gap-2" 
+                  onClick={handleSendMessage}
+                  disabled={!newMessage.trim() || sendMessage.isPending}
+                >
+                  {sendMessage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
               </div>
             </>
           ) : (

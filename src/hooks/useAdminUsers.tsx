@@ -14,29 +14,30 @@ export function useCreateUser() {
   
   return useMutation({
     mutationFn: async (userData: CreateUserData) => {
-      // First create the auth user
+      // Create the auth user with metadata - trigger will create public.users entry
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: userData.email,
         password: userData.password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            full_name: userData.full_name,
+            role: userData.role,
+            phone: userData.phone || null,
+          },
         },
       });
       
       if (authError) throw authError;
       if (!authData.user) throw new Error('Failed to create user');
       
-      // Create the user profile
+      // Wait a moment for trigger to execute, then fetch the created user
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       const { data, error } = await supabase
         .from('users')
-        .insert({
-          id: authData.user.id,
-          email: userData.email,
-          full_name: userData.full_name,
-          role: userData.role,
-          phone: userData.phone || null,
-        })
         .select()
+        .eq('id', authData.user.id)
         .single();
       
       if (error) throw error;

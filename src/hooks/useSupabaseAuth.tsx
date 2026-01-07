@@ -86,7 +86,7 @@ export function useSupabaseAuth() {
     return { data, error: null };
   };
 
-  const signUp = async (email: string, password: string, fullName: string, role: UserRole = 'parent') => {
+  const signUp = async (email: string, password: string, fullName: string, role: UserRole = 'parent', phone?: string) => {
     const redirectUrl = `${window.location.origin}/`;
     
     const { data, error } = await supabase.auth.signUp({
@@ -94,27 +94,16 @@ export function useSupabaseAuth() {
       password,
       options: {
         emailRedirectTo: redirectUrl,
+        data: {
+          full_name: fullName,
+          role: role,
+          phone: phone || null,
+        },
       },
     });
 
     if (error) {
       return { error };
-    }
-
-    // Create user profile - note: this might fail due to RLS, handled by trigger ideally
-    if (data.user) {
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert({
-          id: data.user.id,
-          email,
-          full_name: fullName,
-          role,
-        });
-      
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-      }
     }
 
     return { data, error: null };

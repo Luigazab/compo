@@ -9,20 +9,22 @@ export function useChildParents(childId?: string) {
   return useQuery({
     queryKey: ['child-parents', childId],
     queryFn: async () => {
-      if (!childId) return [];
-      
-      const { data, error } = await supabase
+      let query = supabase
         .from('child_parent')
         .select(`
           *,
           users:parent_id (id, full_name, email, phone)
-        `)
-        .eq('child_id', childId);
+        `);
+      
+      if (childId) {
+        query = query.eq('child_id', childId);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       return data;
     },
-    enabled: !!childId,
   });
 }
 

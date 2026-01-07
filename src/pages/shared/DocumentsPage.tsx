@@ -2,24 +2,18 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageHeader } from "@/components/ui/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  mockDocuments,
-  mockChildren,
-  getChildById,
-  getChildrenByParent,
-  getChildrenByClassroom,
-  mockClassrooms,
-  Document,
-} from "@/lib/mockData";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useDocuments, useCreateDocument, useUpdateDocument, useUploadDocument } from "@/hooks/useDocuments";
+import { useChildren } from "@/hooks/useChildren";
+import { useChildParents } from "@/hooks/useChildParent";
+import { useClassrooms } from "@/hooks/useClassrooms";
 import {
   FileText,
   Upload,
@@ -32,12 +26,13 @@ import {
   Send,
   Plus,
   Filter,
-  Calendar,
   Search,
+  Loader2,
 } from "lucide-react";
-import { format, parseISO, isBefore, addDays } from "date-fns";
+import { format } from "date-fns";
+import { toast } from "sonner";
 
-const getStatusColor = (status: Document["status"]) => {
+const getStatusColor = (status: string) => {
   switch (status) {
     case "approved":
       return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
@@ -47,14 +42,12 @@ const getStatusColor = (status: Document["status"]) => {
       return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400";
     case "rejected":
       return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
-    case "expired":
-      return "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400";
     default:
       return "bg-muted text-muted-foreground";
   }
 };
 
-const getStatusIcon = (status: Document["status"]) => {
+const getStatusIcon = (status: string) => {
   switch (status) {
     case "approved":
       return <CheckCircle2 className="h-4 w-4" />;
@@ -64,137 +57,14 @@ const getStatusIcon = (status: Document["status"]) => {
       return <AlertTriangle className="h-4 w-4" />;
     case "rejected":
       return <XCircle className="h-4 w-4" />;
-    case "expired":
-      return <AlertTriangle className="h-4 w-4" />;
     default:
       return <FileText className="h-4 w-4" />;
   }
 };
 
-const DocumentCard = ({
-  doc,
-  childName,
-  isTeacher,
-  onUpload,
-  onApprove,
-  onReject,
-  onSendReminder,
-}: {
-  doc: Document;
-  childName: string;
-  isTeacher: boolean;
-  onUpload: (docId: string) => void;
-  onApprove: (docId: string) => void;
-  onReject: (docId: string) => void;
-  onSendReminder: (docId: string) => void;
-}) => {
-  const isOverdue = doc.dueDate && isBefore(parseISO(doc.dueDate), new Date()) && doc.status === "pending";
-  const isDueSoon =
-    doc.dueDate &&
-    !isOverdue &&
-    isBefore(parseISO(doc.dueDate), addDays(new Date(), 7)) &&
-    doc.status === "pending";
-
-  return (
-    <Card className={`${isOverdue ? "border-destructive/50" : isDueSoon ? "border-yellow-500/50" : ""}`}>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3 flex-1 min-w-0">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <FileText className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="font-medium text-foreground truncate">{doc.name}</h4>
-              <p className="text-sm text-muted-foreground">{childName}</p>
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-                <Badge variant="outline" className={getStatusColor(doc.status)}>
-                  {getStatusIcon(doc.status)}
-                  <span className="ml-1 capitalize">{doc.status}</span>
-                </Badge>
-                <Badge variant="outline" className="text-xs">
-                  {doc.type}
-                </Badge>
-              </div>
-              {doc.dueDate && (
-                <p className={`text-xs mt-2 flex items-center gap-1 ${isOverdue ? "text-destructive" : isDueSoon ? "text-yellow-600 dark:text-yellow-400" : "text-muted-foreground"}`}>
-                  <Calendar className="h-3 w-3" />
-                  Due: {format(parseISO(doc.dueDate), "MMM d, yyyy")}
-                  {isOverdue && " (Overdue!)"}
-                  {isDueSoon && " (Due soon)"}
-                </p>
-              )}
-              {doc.submittedDate && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Submitted: {format(parseISO(doc.submittedDate), "MMM d, yyyy")}
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            {isTeacher ? (
-              <>
-                {doc.status === "submitted" && (
-                  <>
-                    <Button size="sm" variant="outline" onClick={() => onApprove(doc.id)}>
-                      <CheckCircle2 className="h-4 w-4 mr-1" />
-                      Approve
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => onReject(doc.id)}>
-                      <XCircle className="h-4 w-4 mr-1" />
-                      Reject
-                    </Button>
-                  </>
-                )}
-                {(doc.status === "pending" || doc.status === "expired") && (
-                  <Button size="sm" variant="outline" onClick={() => onSendReminder(doc.id)}>
-                    <Send className="h-4 w-4 mr-1" />
-                    Remind
-                  </Button>
-                )}
-                {doc.status === "approved" && (
-                  <Button size="sm" variant="ghost">
-                    <Eye className="h-4 w-4 mr-1" />
-                    View
-                  </Button>
-                )}
-              </>
-            ) : (
-              <>
-                {(doc.status === "pending" || doc.status === "rejected" || doc.status === "expired") && (
-                  <Button size="sm" onClick={() => onUpload(doc.id)}>
-                    <Upload className="h-4 w-4 mr-1" />
-                    Upload
-                  </Button>
-                )}
-                {(doc.status === "submitted" || doc.status === "approved") && (
-                  <>
-                    <Button size="sm" variant="outline">
-                      <Eye className="h-4 w-4 mr-1" />
-                      View
-                    </Button>
-                    <Button size="sm" variant="ghost">
-                      <Download className="h-4 w-4 mr-1" />
-                      Download
-                    </Button>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-        {doc.notes && (
-          <p className="text-sm text-muted-foreground mt-3 p-2 bg-muted/50 rounded-md">
-            Note: {doc.notes}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
-
 const DocumentsPage = () => {
   const { role, user } = useAuth();
-  const isTeacher = role === "teacher";
+  const isTeacher = role === "teacher" || role === "admin";
   const isParent = role === "parent";
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -202,31 +72,54 @@ const DocumentsPage = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  
+  const [formData, setFormData] = useState({
+    document_type: '',
+    child_id: '',
+    due_date: '',
+  });
+
+  const { data: documents = [], isLoading } = useDocuments();
+  const { data: children = [] } = useChildren();
+  const { data: childParentLinks = [] } = useChildParents();
+  const { data: classrooms = [] } = useClassrooms();
+  const createDocument = useCreateDocument();
+  const updateDocument = useUpdateDocument();
+  const uploadDocument = useUploadDocument();
 
   // Get relevant children based on role
-  let relevantChildren = mockChildren;
-  if (isTeacher && user) {
-    const teacherClassroom = mockClassrooms.find((c) => c.teacherId === user.id);
-    if (teacherClassroom) {
-      relevantChildren = getChildrenByClassroom(teacherClassroom.id);
+  const getRelevantChildren = () => {
+    if (isTeacher && user) {
+      const teacherClassroom = classrooms.find((c) => c.teacher_id === user.id);
+      if (teacherClassroom) {
+        return children.filter((c) => c.classroom_id === teacherClassroom.id);
+      }
+      return children;
+    } else if (isParent && user) {
+      const parentChildIds = childParentLinks
+        .filter((cp) => cp.parent_id === user.id)
+        .map((cp) => cp.child_id);
+      return children.filter((c) => parentChildIds.includes(c.id));
     }
-  } else if (isParent && user) {
-    relevantChildren = getChildrenByParent(user.id);
-  }
+    return children;
+  };
 
+  const relevantChildren = getRelevantChildren();
   const relevantChildIds = relevantChildren.map((c) => c.id);
 
   // Filter documents
-  const filteredDocuments = mockDocuments.filter((doc) => {
-    if (!relevantChildIds.includes(doc.childId)) return false;
+  const filteredDocuments = documents.filter((doc) => {
+    if (!relevantChildIds.includes(doc.child_id)) return false;
     if (statusFilter !== "all" && doc.status !== statusFilter) return false;
     if (searchQuery) {
-      const child = getChildById(doc.childId);
+      const child = children.find((c) => c.id === doc.child_id);
       const searchLower = searchQuery.toLowerCase();
       return (
-        doc.name.toLowerCase().includes(searchLower) ||
-        child?.name.toLowerCase().includes(searchLower) ||
-        doc.type.toLowerCase().includes(searchLower)
+        doc.document_type.toLowerCase().includes(searchLower) ||
+        child?.first_name.toLowerCase().includes(searchLower) ||
+        child?.last_name.toLowerCase().includes(searchLower)
       );
     }
     return true;
@@ -234,27 +127,74 @@ const DocumentsPage = () => {
 
   // Group by status for stats
   const stats = {
-    pending: mockDocuments.filter((d) => relevantChildIds.includes(d.childId) && d.status === "pending").length,
-    submitted: mockDocuments.filter((d) => relevantChildIds.includes(d.childId) && d.status === "submitted").length,
-    approved: mockDocuments.filter((d) => relevantChildIds.includes(d.childId) && d.status === "approved").length,
-    expired: mockDocuments.filter((d) => relevantChildIds.includes(d.childId) && d.status === "expired").length,
+    pending: documents.filter((d) => relevantChildIds.includes(d.child_id) && d.status === "pending").length,
+    submitted: documents.filter((d) => relevantChildIds.includes(d.child_id) && d.status === "submitted").length,
+    approved: documents.filter((d) => relevantChildIds.includes(d.child_id) && d.status === "approved").length,
+    rejected: documents.filter((d) => relevantChildIds.includes(d.child_id) && (d.status === "rejected")).length,
   };
 
-  const handleUpload = (docId: string) => {
+  const handleCreateDocument = async () => {
+    try {
+      await createDocument.mutateAsync({
+        document_type: formData.document_type,
+        child_id: formData.child_id,
+        due_date: formData.due_date || null,
+        status: 'pending',
+      });
+      toast.success('Document requirement created');
+      setIsCreateDialogOpen(false);
+      setFormData({ document_type: '', child_id: '', due_date: '' });
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create document');
+    }
+  };
+
+  const handleUpload = (docId: string, childId: string) => {
     setSelectedDocId(docId);
+    setSelectedChildId(childId);
     setIsUploadDialogOpen(true);
   };
 
-  const handleApprove = (docId: string) => {
-    console.log("Approving document:", docId);
+  const handleSubmitUpload = async () => {
+    if (!uploadFile || !selectedDocId || !selectedChildId) return;
+    
+    try {
+      await uploadDocument.mutateAsync({
+        documentId: selectedDocId,
+        file: uploadFile,
+        childId: selectedChildId,
+      });
+      toast.success('Document uploaded successfully');
+      setIsUploadDialogOpen(false);
+      setUploadFile(null);
+      setSelectedDocId(null);
+      setSelectedChildId(null);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to upload document');
+    }
   };
 
-  const handleReject = (docId: string) => {
-    console.log("Rejecting document:", docId);
+  const handleApprove = async (docId: string) => {
+    try {
+      await updateDocument.mutateAsync({ id: docId, status: 'approved' });
+      toast.success('Document approved');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to approve document');
+    }
   };
 
-  const handleSendReminder = (docId: string) => {
-    console.log("Sending reminder for document:", docId);
+  const handleReject = async (docId: string) => {
+    try {
+      await updateDocument.mutateAsync({ id: docId, status: 'rejected' });
+      toast.success('Document rejected');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to reject document');
+    }
+  };
+
+  const getChildName = (childId: string) => {
+    const child = children.find((c) => c.id === childId);
+    return child ? `${child.first_name} ${child.last_name}` : 'Unknown';
   };
 
   return (
@@ -306,8 +246,8 @@ const DocumentsPage = () => {
                 <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-red-700 dark:text-red-400">{stats.expired}</p>
-                <p className="text-sm text-red-600 dark:text-red-500">Expired</p>
+                <p className="text-2xl font-bold text-red-700 dark:text-red-400">{stats.rejected}</p>
+                <p className="text-sm text-red-600 dark:text-red-500">Rejected</p>
               </div>
             </CardContent>
           </Card>
@@ -336,203 +276,189 @@ const DocumentsPage = () => {
                 <SelectItem value="submitted">Submitted</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
                 <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
               </SelectContent>
             </Select>
           </div>
           {isTeacher && (
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Requirement
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Create Document Requirement</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label>Document Name</Label>
-                    <Input placeholder="e.g., Annual Health Check" />
-                  </div>
-                  <div>
-                    <Label>Document Type</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="medical">Medical</SelectItem>
-                        <SelectItem value="administrative">Administrative</SelectItem>
-                        <SelectItem value="consent">Consent</SelectItem>
-                        <SelectItem value="identification">Identification</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Student</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select student" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {relevantChildren.map((child) => (
-                          <SelectItem key={child.id} value={child.id}>
-                            {child.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Due Date</Label>
-                    <Input type="date" />
-                  </div>
-                  <div>
-                    <Label>Notes (Optional)</Label>
-                    <Textarea placeholder="Any additional instructions..." />
-                  </div>
-                  <Button className="w-full" onClick={() => setIsCreateDialogOpen(false)}>
-                    Create Requirement
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Requirement
+            </Button>
           )}
         </div>
 
         {/* Documents List */}
-        <Tabs defaultValue="all" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="all">All Documents</TabsTrigger>
-            <TabsTrigger value="action">Needs Action</TabsTrigger>
-            <TabsTrigger value="completed">Completed</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="all" className="space-y-4">
-            {filteredDocuments.length === 0 ? (
-              <Card>
-                <CardContent className="p-8 text-center text-muted-foreground">
-                  <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No documents found matching your criteria.</p>
-                </CardContent>
-              </Card>
+        <Card>
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="p-4 space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-20 w-full" />
+                ))}
+              </div>
+            ) : filteredDocuments.length === 0 ? (
+              <div className="p-12 text-center text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No documents found matching your criteria.</p>
+              </div>
             ) : (
-              <div className="grid gap-4">
+              <div className="divide-y">
                 {filteredDocuments.map((doc) => (
-                  <DocumentCard
-                    key={doc.id}
-                    doc={doc}
-                    childName={getChildById(doc.childId)?.name || "Unknown"}
-                    isTeacher={isTeacher}
-                    onUpload={handleUpload}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
-                    onSendReminder={handleSendReminder}
-                  />
+                  <div key={doc.id} className="p-4 flex flex-col md:flex-row md:items-center gap-4">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <FileText className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-foreground truncate">{doc.document_type}</h4>
+                        <p className="text-sm text-muted-foreground">{getChildName(doc.child_id)}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                          <Badge variant="outline" className={getStatusColor(doc.status || 'pending')}>
+                            {getStatusIcon(doc.status || 'pending')}
+                            <span className="ml-1 capitalize">{doc.status || 'pending'}</span>
+                          </Badge>
+                        </div>
+                        {doc.due_date && (
+                          <p className="text-xs mt-2 text-muted-foreground">
+                            Due: {format(new Date(doc.due_date), 'MMM d, yyyy')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {isTeacher ? (
+                        <>
+                          {doc.status === "submitted" && (
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => handleApprove(doc.id)}>
+                                <CheckCircle2 className="h-4 w-4 mr-1" />
+                                Approve
+                              </Button>
+                              <Button size="sm" variant="outline" className="text-destructive" onClick={() => handleReject(doc.id)}>
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                          {doc.file_url && (
+                            <Button size="sm" variant="ghost" asChild>
+                              <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
+                                <Eye className="h-4 w-4 mr-1" />
+                                View
+                              </a>
+                            </Button>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {(doc.status === "pending" || doc.status === "rejected") && (
+                            <Button size="sm" onClick={() => handleUpload(doc.id, doc.child_id)}>
+                              <Upload className="h-4 w-4 mr-1" />
+                              Upload
+                            </Button>
+                          )}
+                          {doc.file_url && (
+                            <Button size="sm" variant="outline" asChild>
+                              <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
+                                <Eye className="h-4 w-4 mr-1" />
+                                View
+                              </a>
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
-          </TabsContent>
+          </CardContent>
+        </Card>
 
-          <TabsContent value="action" className="space-y-4">
-            {filteredDocuments.filter((d) =>
-              isTeacher
-                ? d.status === "submitted"
-                : ["pending", "rejected", "expired"].includes(d.status)
-            ).length === 0 ? (
-              <Card>
-                <CardContent className="p-8 text-center text-muted-foreground">
-                  <CheckCircle2 className="h-12 w-12 mx-auto mb-4 opacity-50 text-green-500" />
-                  <p>No documents require your action!</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4">
-                {filteredDocuments
-                  .filter((d) =>
-                    isTeacher
-                      ? d.status === "submitted"
-                      : ["pending", "rejected", "expired"].includes(d.status)
-                  )
-                  .map((doc) => (
-                    <DocumentCard
-                      key={doc.id}
-                      doc={doc}
-                      childName={getChildById(doc.childId)?.name || "Unknown"}
-                      isTeacher={isTeacher}
-                      onUpload={handleUpload}
-                      onApprove={handleApprove}
-                      onReject={handleReject}
-                      onSendReminder={handleSendReminder}
-                    />
-                  ))}
+        {/* Create Document Dialog */}
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create Document Requirement</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Document Type</Label>
+                <Input
+                  placeholder="e.g., Medical Certificate"
+                  value={formData.document_type}
+                  onChange={(e) => setFormData({ ...formData, document_type: e.target.value })}
+                />
               </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="completed" className="space-y-4">
-            {filteredDocuments.filter((d) => d.status === "approved").length === 0 ? (
-              <Card>
-                <CardContent className="p-8 text-center text-muted-foreground">
-                  <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No completed documents yet.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4">
-                {filteredDocuments
-                  .filter((d) => d.status === "approved")
-                  .map((doc) => (
-                    <DocumentCard
-                      key={doc.id}
-                      doc={doc}
-                      childName={getChildById(doc.childId)?.name || "Unknown"}
-                      isTeacher={isTeacher}
-                      onUpload={handleUpload}
-                      onApprove={handleApprove}
-                      onReject={handleReject}
-                      onSendReminder={handleSendReminder}
-                    />
-                  ))}
+              <div>
+                <Label>Student</Label>
+                <Select
+                  value={formData.child_id}
+                  onValueChange={(value) => setFormData({ ...formData, child_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select student" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {relevantChildren.map((child) => (
+                      <SelectItem key={child.id} value={child.id}>
+                        {child.first_name} {child.last_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-          </TabsContent>
-        </Tabs>
-      </div>
-
-      {/* Upload Dialog */}
-      <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Upload Document</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
-              <Upload className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mb-2">
-                Drag and drop your file here, or click to browse
-              </p>
-              <Input type="file" className="max-w-xs mx-auto" />
+              <div>
+                <Label>Due Date (Optional)</Label>
+                <Input
+                  type="date"
+                  value={formData.due_date}
+                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                />
+              </div>
             </div>
-            <div>
-              <Label>Notes (Optional)</Label>
-              <Textarea placeholder="Any additional notes about this document..." />
-            </div>
-            <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => setIsUploadDialogOpen(false)}>
-                Cancel
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
+              <Button 
+                onClick={handleCreateDocument}
+                disabled={!formData.document_type || !formData.child_id || createDocument.isPending}
+              >
+                {createDocument.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Create
               </Button>
-              <Button className="flex-1" onClick={() => setIsUploadDialogOpen(false)}>
-                <Upload className="h-4 w-4 mr-2" />
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Upload Dialog */}
+        <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Upload Document</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <Input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+              />
+              <p className="text-sm text-muted-foreground">
+                Accepted formats: PDF, JPG, PNG, DOC, DOCX
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsUploadDialogOpen(false)}>Cancel</Button>
+              <Button 
+                onClick={handleSubmitUpload}
+                disabled={!uploadFile || uploadDocument.isPending}
+              >
+                {uploadDocument.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Upload
               </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </DashboardLayout>
   );
 };
