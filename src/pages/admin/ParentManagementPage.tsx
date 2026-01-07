@@ -111,9 +111,9 @@ const ParentManagementPage = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <input type="checkbox" id="sendInvite" className="rounded" defaultChecked />
-                    <Label htmlFor="sendInvite" className="text-sm font-normal">
+                    <label htmlFor="sendInvite" className="text-sm font-normal">
                       Send registration invitation email
-                    </Label>
+                    </label>
                   </div>
                   <div className="flex justify-end gap-2 pt-4">
                     <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>

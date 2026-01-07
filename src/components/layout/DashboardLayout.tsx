@@ -31,6 +31,7 @@ import {
   Building,
   BarChart3,
   ChevronRight,
+  School,
 } from 'lucide-react';
 
 interface NavItem {
@@ -111,14 +112,15 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         <button
           onClick={() => setSidebarOpen(true)}
           className="p-2 hover:bg-muted rounded-lg transition-colors"
+          aria-label='open sidebar'
         >
           <Menu className="h-6 w-6" />
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <Baby className="h-5 w-5 text-primary-foreground" />
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center border-2 border-slate-600">
+            <School className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="font-bold text-lg">LittleSteps</span>
+          <img className="text-foreground" src="/logo.PNG" alt="ComPo" width="125px" height="auto" />
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -166,17 +168,18 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           {/* Logo */}
           <div className="h-16 flex items-center justify-between px-4 border-b border-sidebar-border">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-glow">
-                <Baby className="h-6 w-6 text-primary-foreground" />
+              <div className="w-10 h-10 rounded-xl p-1 bg-primary flex items-center justify-center shadow-glow border-2 border-slate-600">
+                <School className="h-7 w-7 text-primary-foreground" />
               </div>
               <div>
-                <span className="font-bold text-lg text-foreground">LittleSteps</span>
-                <p className="text-xs text-muted-foreground">Daycare Portal</p>
+                <img className="text-foreground" src="/logo.PNG" alt="ComPo" width="60%" height="auto" />
+                <p className="text-sm text-muted-foreground">Daycare Portal</p>
               </div>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
               className="lg:hidden p-1 hover:bg-muted rounded"
+              aria-label='Close sidebar'
             >
               <X className="h-5 w-5" />
             </button>

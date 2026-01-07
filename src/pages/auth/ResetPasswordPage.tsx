@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Baby, ArrowLeft, Loader2, Eye, EyeOff, CheckCircle, Circle } from 'lucide-react';
+import { Baby, ArrowLeft, Loader2, Eye, EyeOff, CheckCircle, Circle, School } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const ResetPasswordPage: React.FC = () => {
@@ -82,12 +82,12 @@ const ResetPasswordPage: React.FC = () => {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-glow">
-            <Baby className="h-7 w-7 text-primary-foreground" />
+          <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-glow border-2 border-slate-600">
+            <School className="h-7 w-7 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">LittleSteps</h1>
-            <p className="text-sm text-muted-foreground">Daycare Portal</p>
+            <img className="text-foreground" src="/logo.PNG" alt="ComPo" width="125px" height="auto" />
+            <p className="text-sm text-muted-foreground">Daycare Communication Portal</p>
           </div>
         </div>
 

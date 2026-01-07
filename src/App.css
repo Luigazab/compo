@@ -40,3 +40,9 @@
 .read-the-docs {
   color: #888;
 }
+
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear,
+input[type="password"]::-webkit-textfield-decoration-container {
+  display: none;
+}

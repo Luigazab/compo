@@ -57,12 +57,12 @@ const LoginPage: React.FC = () => {
 
   return (
     <div className="min-h-screen relative flex">
-      <div className=" absolute top-8 left-24 flex items-center gap-3 x-20">
+      <div className=" absolute top-8 left-8 md:left-24 flex items-center gap-3 x-20">
         <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-glow border-2 border-slate-600">
           <School className="h-7 w-7 text-primary-foreground" />
         </div>
         <div>
-          <img className="text-foreground" src=".\logo.PNG" alt="ComPo" width="10%" height="auto" />
+          <img className="text-foreground" src="/logo.PNG" alt="ComPo" width="125px" height="auto" />
           <p className="text-sm text-muted-foreground">Daycare Communication Portal</p>
         </div>
       </div>
