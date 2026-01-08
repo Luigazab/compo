@@ -7,7 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Baby, Loader2, Building, Clock, User, CheckCircle, School } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Loader2, Building, Clock, User, CheckCircle, School } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const steps = [
@@ -88,19 +89,45 @@ const FirstTimeSetupPage: React.FC = () => {
     setIsLoading(true);
     setError('');
     
-    // Create admin account using Supabase
-    const result = await signUp(adminData.email, adminData.password, adminData.name, 'admin');
-    
-    if (result.success) {
+    try {
+      // Create admin account using Supabase
+      const result = await signUp(adminData.email, adminData.password, adminData.name, 'admin');
+      
+      if (!result.success) {
+        setError(result.error || 'Failed to create account');
+        setIsLoading(false);
+        return;
+      }
+
+      // Save school settings to database
+      const { error: settingsError } = await supabase
+        .from('school_settings')
+        .insert({
+          name: daycareData.name,
+          address: daycareData.address || null,
+          phone: daycareData.phone || null,
+          email: daycareData.email || null,
+          description: daycareData.description || null,
+          timezone: operatingData.timezone,
+          open_time: operatingData.openTime,
+          close_time: operatingData.closeTime,
+          work_days: operatingData.workDays,
+        });
+
+      if (settingsError) {
+        console.error('Failed to save school settings:', settingsError);
+        // Don't fail the whole signup, just log the error
+      }
+
       toast({
         title: 'Setup complete!',
         description: 'Your daycare portal is ready. Please check your email to verify your account.',
       });
       navigate('/login');
-    } else {
-      setError(result.error || 'Failed to create account');
-      setIsLoading(false);
+    } catch (err: any) {
+      setError(err.message || 'Failed to complete setup');
     }
+    setIsLoading(false);
   };
 
   const timezones = [
@@ -108,6 +135,7 @@ const FirstTimeSetupPage: React.FC = () => {
     { value: 'America/Chicago', label: 'Central Time (CT)' },
     { value: 'America/Denver', label: 'Mountain Time (MT)' },
     { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+    { value: 'Asia/Manila', label: 'Philippine Time (PHT)' },
   ];
 
   return (
@@ -119,7 +147,7 @@ const FirstTimeSetupPage: React.FC = () => {
             <School className="h-7 w-7 text-primary-foreground" />
           </div>
           <div>
-            <img className="text-foreground" src=".\logo.PNG" alt="ComPo" width="125px" height="auto" />
+            <h1 className="text-2xl font-bold">Compo</h1>
             <p className="text-sm text-muted-foreground">Admin account setup</p>
           </div>
         </div>

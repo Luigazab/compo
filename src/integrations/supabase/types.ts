@@ -290,6 +290,27 @@ export type Database = {
           },
         ]
       }
+      holidays: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       meal_logs: {
         Row: {
           child_id: string
@@ -396,6 +417,27 @@ export type Database = {
           },
         ]
       }
+      notification_settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          setting_key: string
+          setting_value: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          setting_key: string
+          setting_value?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          setting_key?: string
+          setting_value?: boolean | null
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string | null
@@ -477,6 +519,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      school_settings: {
+        Row: {
+          address: string | null
+          close_time: string | null
+          created_at: string | null
+          date_format: string | null
+          description: string | null
+          email: string | null
+          id: string
+          language: string | null
+          logo_url: string | null
+          name: string
+          open_time: string | null
+          phone: string | null
+          timezone: string | null
+          updated_at: string | null
+          website: string | null
+          work_days: string[] | null
+        }
+        Insert: {
+          address?: string | null
+          close_time?: string | null
+          created_at?: string | null
+          date_format?: string | null
+          description?: string | null
+          email?: string | null
+          id?: string
+          language?: string | null
+          logo_url?: string | null
+          name: string
+          open_time?: string | null
+          phone?: string | null
+          timezone?: string | null
+          updated_at?: string | null
+          website?: string | null
+          work_days?: string[] | null
+        }
+        Update: {
+          address?: string | null
+          close_time?: string | null
+          created_at?: string | null
+          date_format?: string | null
+          description?: string | null
+          email?: string | null
+          id?: string
+          language?: string | null
+          logo_url?: string | null
+          name?: string
+          open_time?: string | null
+          phone?: string | null
+          timezone?: string | null
+          updated_at?: string | null
+          website?: string | null
+          work_days?: string[] | null
+        }
+        Relationships: []
       }
       users: {
         Row: {

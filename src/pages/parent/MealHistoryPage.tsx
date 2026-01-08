@@ -6,16 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MealCard } from '@/components/ui/meal-card';
-import { 
-  getChildrenByParent, 
-  mockMealLogs, 
-  getChildById,
-  MealLog 
-} from '@/lib/mockData';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useSupabaseAuth } from '@/hooks/useSupabaseAuth';
+import { useParentChildren } from '@/hooks/useChildren';
+import { useMealLogs } from '@/hooks/useMealLogs';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
-  Filter,
   Download,
   TrendingUp,
   Coffee,
@@ -23,14 +19,18 @@ import {
   Cookie,
   Moon,
   List,
-  CalendarIcon
+  CalendarIcon,
+  Loader2
 } from 'lucide-react';
-import { format, parseISO, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from 'date-fns';
+import { format, parseISO, isSameDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
 const MealHistoryPage: React.FC = () => {
-  const children = getChildrenByParent('parent-1');
+  const { profile } = useSupabaseAuth();
+  const { data: children = [], isLoading: loadingChildren } = useParentChildren(profile?.id);
+  const { data: allMealLogs = [], isLoading: loadingMeals } = useMealLogs();
+  
   const [selectedChild, setSelectedChild] = useState<string>('all');
   const [mealTypeFilter, setMealTypeFilter] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
@@ -39,33 +39,26 @@ const MealHistoryPage: React.FC = () => {
 
   const childIds = children.map(c => c.id);
 
-  // Extended mock data for better calendar view
-  const allMeals: MealLog[] = [
-    ...mockMealLogs,
-    { id: 'meal-6', childId: 'child-1', date: '2024-12-27', mealType: 'breakfast', foodItems: ['Cereal', 'Milk', 'Orange Juice'], portionConsumed: 'all', timestamp: '08:30' },
-    { id: 'meal-7', childId: 'child-1', date: '2024-12-27', mealType: 'lunch', foodItems: ['Chicken Nuggets', 'Carrots', 'Rice'], portionConsumed: 'most', timestamp: '12:15' },
-    { id: 'meal-8', childId: 'child-5', date: '2024-12-28', mealType: 'breakfast', foodItems: ['Yogurt', 'Berries', 'Granola'], portionConsumed: 'all', timestamp: '09:00' },
-    { id: 'meal-9', childId: 'child-5', date: '2024-12-28', mealType: 'lunch', foodItems: ['Sandwich', 'Fruit Cup', 'Milk'], portionConsumed: 'some', notes: 'Not very hungry', timestamp: '12:00' },
-  ];
+  // Filter meals for this parent's children
+  const myMeals = allMealLogs.filter(meal => childIds.includes(meal.child_id));
 
-  const filteredMeals = allMeals.filter(meal => {
-    const matchesChild = selectedChild === 'all' ? childIds.includes(meal.childId) : meal.childId === selectedChild;
-    const matchesType = mealTypeFilter === 'all' || meal.mealType === mealTypeFilter;
-    const matchesDate = selectedDate ? isSameDay(parseISO(meal.date), selectedDate) : true;
+  const filteredMeals = myMeals.filter(meal => {
+    const matchesChild = selectedChild === 'all' || meal.child_id === selectedChild;
+    const matchesType = mealTypeFilter === 'all' || meal.meal_type === mealTypeFilter;
+    const matchesDate = selectedDate ? isSameDay(parseISO(meal.meal_date), selectedDate) : true;
     return matchesChild && matchesType && matchesDate;
   });
 
   // Calculate portion trends
-  const portionStats = allMeals
-    .filter(m => childIds.includes(m.childId))
-    .reduce((acc, meal) => {
-      acc[meal.portionConsumed] = (acc[meal.portionConsumed] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+  const portionStats = myMeals.reduce((acc, meal) => {
+    const portion = meal.portion_consumed || 'some';
+    acc[portion] = (acc[portion] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
   const totalMeals = Object.values(portionStats).reduce((a, b) => a + b, 0);
 
-  const getMealIcon = (type: string) => {
+  const getMealIcon = (type: string | null) => {
     const icons = {
       breakfast: <Coffee className="h-4 w-4" />,
       lunch: <UtensilsCrossed className="h-4 w-4" />,
@@ -76,9 +69,7 @@ const MealHistoryPage: React.FC = () => {
   };
 
   // Get days with meals for calendar highlighting
-  const daysWithMeals = allMeals
-    .filter(m => childIds.includes(m.childId))
-    .map(m => parseISO(m.date));
+  const daysWithMeals = myMeals.map(m => parseISO(m.meal_date));
 
   const handleExport = () => {
     toast({
@@ -86,6 +77,18 @@ const MealHistoryPage: React.FC = () => {
       description: "Your meal history is being prepared for download."
     });
   };
+
+  const isLoading = loadingChildren || loadingMeals;
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -106,7 +109,9 @@ const MealHistoryPage: React.FC = () => {
                 <SelectContent>
                   <SelectItem value="all">All Children</SelectItem>
                   {children.map(child => (
-                    <SelectItem key={child.id} value={child.id}>{child.name}</SelectItem>
+                    <SelectItem key={child.id} value={child.id}>
+                      {child.first_name} {child.last_name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -224,33 +229,33 @@ const MealHistoryPage: React.FC = () => {
               ) : (
                 <div className="space-y-4">
                   {filteredMeals.map(meal => {
-                    const child = getChildById(meal.childId);
+                    const child = children.find(c => c.id === meal.child_id);
                     return (
                       <div key={meal.id} className="p-4 bg-muted rounded-xl">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <div className="p-2 bg-background rounded-lg">
-                              {getMealIcon(meal.mealType)}
+                              {getMealIcon(meal.meal_type)}
                             </div>
                             <div>
-                              <p className="font-semibold capitalize">{meal.mealType}</p>
+                              <p className="font-semibold capitalize">{meal.meal_type || 'Meal'}</p>
                               <p className="text-sm text-muted-foreground">
-                                {child?.name} • {meal.timestamp}
+                                {child ? `${child.first_name} ${child.last_name}` : 'Unknown'}
                               </p>
                             </div>
                           </div>
                           <Badge className={cn(
-                            meal.portionConsumed === 'all' && 'bg-success text-success-foreground',
-                            meal.portionConsumed === 'most' && 'bg-primary text-primary-foreground',
-                            meal.portionConsumed === 'some' && 'bg-warning text-warning-foreground',
-                            meal.portionConsumed === 'none' && 'bg-destructive text-destructive-foreground'
+                            meal.portion_consumed === 'all' && 'bg-success text-success-foreground',
+                            meal.portion_consumed === 'most' && 'bg-primary text-primary-foreground',
+                            meal.portion_consumed === 'some' && 'bg-warning text-warning-foreground',
+                            meal.portion_consumed === 'none' && 'bg-destructive text-destructive-foreground'
                           )}>
-                            Ate {meal.portionConsumed}
+                            Ate {meal.portion_consumed || 'some'}
                           </Badge>
                         </div>
                         <div className="flex flex-wrap gap-2 mb-2">
-                          {meal.foodItems.map((item, idx) => (
-                            <Badge key={idx} variant="outline">{item}</Badge>
+                          {meal.food_items.split(',').map((item, idx) => (
+                            <Badge key={idx} variant="outline">{item.trim()}</Badge>
                           ))}
                         </div>
                         {meal.notes && (
@@ -273,54 +278,54 @@ const MealHistoryPage: React.FC = () => {
             <CardTitle className="text-lg">All Meals</CardTitle>
           </CardHeader>
           <CardContent>
-            {allMeals
+            {myMeals
               .filter(meal => {
-                const matchesChild = selectedChild === 'all' ? childIds.includes(meal.childId) : meal.childId === selectedChild;
-                const matchesType = mealTypeFilter === 'all' || meal.mealType === mealTypeFilter;
+                const matchesChild = selectedChild === 'all' || meal.child_id === selectedChild;
+                const matchesType = mealTypeFilter === 'all' || meal.meal_type === mealTypeFilter;
                 return matchesChild && matchesType;
               })
-              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+              .sort((a, b) => new Date(b.meal_date).getTime() - new Date(a.meal_date).getTime())
               .length === 0 ? (
               <p className="text-center text-muted-foreground py-8">
                 No meals found.
               </p>
             ) : (
               <div className="space-y-4">
-                {allMeals
+                {myMeals
                   .filter(meal => {
-                    const matchesChild = selectedChild === 'all' ? childIds.includes(meal.childId) : meal.childId === selectedChild;
-                    const matchesType = mealTypeFilter === 'all' || meal.mealType === mealTypeFilter;
+                    const matchesChild = selectedChild === 'all' || meal.child_id === selectedChild;
+                    const matchesType = mealTypeFilter === 'all' || meal.meal_type === mealTypeFilter;
                     return matchesChild && matchesType;
                   })
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .sort((a, b) => new Date(b.meal_date).getTime() - new Date(a.meal_date).getTime())
                   .map(meal => {
-                    const child = getChildById(meal.childId);
+                    const child = children.find(c => c.id === meal.child_id);
                     return (
                       <div key={meal.id} className="p-4 bg-muted rounded-xl">
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
                           <div className="flex items-center gap-3">
                             <div className="p-2 bg-background rounded-lg">
-                              {getMealIcon(meal.mealType)}
+                              {getMealIcon(meal.meal_type)}
                             </div>
                             <div>
-                              <p className="font-semibold capitalize">{meal.mealType}</p>
+                              <p className="font-semibold capitalize">{meal.meal_type || 'Meal'}</p>
                               <p className="text-sm text-muted-foreground">
-                                {child?.name} • {format(parseISO(meal.date), 'MMM d, yyyy')} • {meal.timestamp}
+                                {child ? `${child.first_name} ${child.last_name}` : 'Unknown'} • {format(parseISO(meal.meal_date), 'MMM d, yyyy')}
                               </p>
                             </div>
                           </div>
                           <Badge className={cn(
-                            meal.portionConsumed === 'all' && 'bg-success text-success-foreground',
-                            meal.portionConsumed === 'most' && 'bg-primary text-primary-foreground',
-                            meal.portionConsumed === 'some' && 'bg-warning text-warning-foreground',
-                            meal.portionConsumed === 'none' && 'bg-destructive text-destructive-foreground'
+                            meal.portion_consumed === 'all' && 'bg-success text-success-foreground',
+                            meal.portion_consumed === 'most' && 'bg-primary text-primary-foreground',
+                            meal.portion_consumed === 'some' && 'bg-warning text-warning-foreground',
+                            meal.portion_consumed === 'none' && 'bg-destructive text-destructive-foreground'
                           )}>
-                            Ate {meal.portionConsumed}
+                            Ate {meal.portion_consumed || 'some'}
                           </Badge>
                         </div>
                         <div className="flex flex-wrap gap-2 mb-2">
-                          {meal.foodItems.map((item, idx) => (
-                            <Badge key={idx} variant="outline">{item}</Badge>
+                          {meal.food_items.split(',').map((item, idx) => (
+                            <Badge key={idx} variant="outline">{item.trim()}</Badge>
                           ))}
                         </div>
                         {meal.notes && (

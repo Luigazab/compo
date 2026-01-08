@@ -1,20 +1,17 @@
 import React, { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader } from '@/components/ui/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { 
-  getChildrenByParent, 
-  mockWellbeingReports, 
-  getChildById, 
-  getUserById,
-  WellbeingReport 
-} from '@/lib/mockData';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useSupabaseAuth } from '@/hooks/useSupabaseAuth';
+import { useParentChildren } from '@/hooks/useChildren';
+import { useWellbeingReports } from '@/hooks/useWellbeingReports';
+import { useUser } from '@/hooks/useUsers';
 import { 
   Filter,
   CheckCircle,
@@ -25,69 +22,56 @@ import {
   Thermometer,
   Brain,
   HelpCircle,
-  Eye
+  Loader2
 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
 const WellbeingReportsPage: React.FC = () => {
-  const children = getChildrenByParent('parent-1');
+  const { profile } = useSupabaseAuth();
+  const { data: children = [], isLoading: loadingChildren } = useParentChildren(profile?.id);
+  const { data: allReports = [], isLoading: loadingReports } = useWellbeingReports();
+  
   const [selectedChild, setSelectedChild] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [selectedReport, setSelectedReport] = useState<WellbeingReport | null>(null);
+  const [selectedReport, setSelectedReport] = useState<any | null>(null);
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
   const [replyMessage, setReplyMessage] = useState('');
   const [acknowledgedReports, setAcknowledgedReports] = useState<Set<string>>(new Set());
 
   const childIds = children.map(c => c.id);
 
-  // For demo, we'll add more mock reports
-  const allReports: WellbeingReport[] = [
-    ...mockWellbeingReports,
-    {
-      id: 'report-3',
-      childId: 'child-5',
-      date: '2024-12-28',
-      time: '11:15',
-      type: 'behavior',
-      description: 'Sophia had difficulty sharing toys during playtime today.',
-      severity: 'low',
-      actionTaken: 'Had a gentle conversation about sharing and taking turns. She understood and did better later.',
-      photos: [],
-      parentNotified: true,
-      acknowledged: false,
-      teacherId: 'teacher-1'
-    }
-  ];
+  // Filter reports for this parent's children
+  const myReports = allReports.filter(report => childIds.includes(report.child_id));
 
-  const filteredReports = allReports.filter(report => {
-    const matchesChild = selectedChild === 'all' ? childIds.includes(report.childId) : report.childId === selectedChild;
+  const filteredReports = myReports.filter(report => {
+    const matchesChild = selectedChild === 'all' || report.child_id === selectedChild;
     const matchesSeverity = severityFilter === 'all' || report.severity === severityFilter;
-    const matchesType = typeFilter === 'all' || report.type === typeFilter;
+    const matchesType = typeFilter === 'all' || report.incident_type === typeFilter;
     return matchesChild && matchesSeverity && matchesType;
-  }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }).sort((a, b) => new Date(b.report_date).getTime() - new Date(a.report_date).getTime());
 
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase();
 
-  const getTypeIcon = (type: WellbeingReport['type']) => {
-    const icons = {
+  const getTypeIcon = (type: string | null) => {
+    const icons: Record<string, React.ReactNode> = {
       injury: <AlertTriangle className="h-5 w-5" />,
       illness: <Thermometer className="h-5 w-5" />,
       behavior: <Brain className="h-5 w-5" />,
       other: <HelpCircle className="h-5 w-5" />
     };
-    return icons[type];
+    return icons[type || 'other'] || icons.other;
   };
 
-  const getSeverityColor = (severity: string) => {
-    const colors = {
+  const getSeverityColor = (severity: string | null) => {
+    const colors: Record<string, string> = {
       low: 'bg-success/10 text-success border-success/20',
       medium: 'bg-warning/10 text-warning border-warning/20',
       high: 'bg-destructive/10 text-destructive border-destructive/20'
     };
-    return colors[severity as keyof typeof colors] || colors.low;
+    return colors[severity || 'low'] || colors.low;
   };
 
   const handleAcknowledge = (reportId: string) => {
@@ -109,20 +93,32 @@ const WellbeingReportsPage: React.FC = () => {
     setSelectedReport(null);
   };
 
-  const handleDownload = (report: WellbeingReport) => {
+  const handleDownload = (report: any) => {
     toast({
       title: "Downloading report",
-      description: `Report from ${format(parseISO(report.date), 'MMM d, yyyy')} is being downloaded.`
+      description: `Report from ${format(new Date(report.report_date), 'MMM d, yyyy')} is being downloaded.`
     });
   };
 
-  const handlePrint = (report: WellbeingReport) => {
+  const handlePrint = () => {
     toast({
       title: "Preparing to print",
       description: "The report is being prepared for printing."
     });
     window.print();
   };
+
+  const isLoading = loadingChildren || loadingReports;
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -147,7 +143,9 @@ const WellbeingReportsPage: React.FC = () => {
               <SelectContent>
                 <SelectItem value="all">All Children</SelectItem>
                 {children.map(child => (
-                  <SelectItem key={child.id} value={child.id}>{child.name}</SelectItem>
+                  <SelectItem key={child.id} value={child.id}>
+                    {child.first_name} {child.last_name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -190,9 +188,8 @@ const WellbeingReportsPage: React.FC = () => {
           </Card>
         ) : (
           filteredReports.map(report => {
-            const child = getChildById(report.childId);
-            const teacher = getUserById(report.teacherId);
-            const isAcknowledged = report.acknowledged || acknowledgedReports.has(report.id);
+            const child = children.find(c => c.id === report.child_id);
+            const isAcknowledged = report.parent_notified || acknowledgedReports.has(report.id);
 
             return (
               <Card key={report.id} className={cn('shadow-card', getSeverityColor(report.severity))}>
@@ -206,32 +203,36 @@ const WellbeingReportsPage: React.FC = () => {
                         report.severity === 'medium' && 'bg-warning/20',
                         report.severity === 'high' && 'bg-destructive/20'
                       )}>
-                        {getTypeIcon(report.type)}
+                        {getTypeIcon(report.incident_type)}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-semibold">{child?.name}</h3>
+                          <h3 className="font-semibold">
+                            {child ? `${child.first_name} ${child.last_name}` : 'Unknown'}
+                          </h3>
                           <Badge className={cn(
                             'capitalize',
                             report.severity === 'low' && 'bg-success text-success-foreground',
                             report.severity === 'medium' && 'bg-warning text-warning-foreground',
                             report.severity === 'high' && 'bg-destructive text-destructive-foreground'
                           )}>
-                            {report.severity}
+                            {report.severity || 'low'}
                           </Badge>
                           <Badge variant="outline" className="capitalize">
-                            {report.type}
+                            {report.incident_type || 'other'}
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground mb-2">
-                          {format(parseISO(report.date), 'EEEE, MMMM d, yyyy')} at {report.time}
+                          {format(new Date(report.report_date), 'EEEE, MMMM d, yyyy')}
                         </p>
                         <p className="text-foreground mb-3">{report.description}</p>
-                        <div className="bg-background/50 rounded-lg p-3">
-                          <p className="text-sm">
-                            <strong>Action taken:</strong> {report.actionTaken}
-                          </p>
-                        </div>
+                        {report.action_taken && (
+                          <div className="bg-background/50 rounded-lg p-3">
+                            <p className="text-sm">
+                              <strong>Action taken:</strong> {report.action_taken}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -260,13 +261,11 @@ const WellbeingReportsPage: React.FC = () => {
                         <Button variant="outline" size="icon" onClick={() => handleDownload(report)}>
                           <Download className="h-4 w-4" />
                         </Button>
-                        <Button variant="outline" size="icon" onClick={() => handlePrint(report)}>
+                        <Button variant="outline" size="icon" onClick={handlePrint}>
                           <Printer className="h-4 w-4" />
                         </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground text-center">
-                        Reported by {teacher?.name}
-                      </p>
+                      <ReporterInfo reporterId={report.created_by} />
                     </div>
                   </div>
                 </CardContent>
@@ -286,7 +285,7 @@ const WellbeingReportsPage: React.FC = () => {
             {selectedReport && (
               <div className="mb-4 p-3 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground mb-1">
-                  Regarding: {getChildById(selectedReport.childId)?.name}'s {selectedReport.type} report
+                  Regarding: {children.find(c => c.id === selectedReport.child_id)?.first_name}'s {selectedReport.incident_type} report
                 </p>
                 <p className="text-sm">{selectedReport.description}</p>
               </div>
@@ -305,6 +304,17 @@ const WellbeingReportsPage: React.FC = () => {
         </DialogContent>
       </Dialog>
     </DashboardLayout>
+  );
+};
+
+// Separate component to fetch reporter info
+const ReporterInfo: React.FC<{ reporterId: string }> = ({ reporterId }) => {
+  const { data: reporter } = useUser(reporterId);
+  
+  return (
+    <p className="text-xs text-muted-foreground text-center">
+      Reported by {reporter?.full_name || 'Staff'}
+    </p>
   );
 };
 

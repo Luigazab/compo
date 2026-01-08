@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   BarChart,
   Bar,
@@ -26,45 +27,89 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { Download, FileText, TrendingUp, Users, ClipboardCheck, FileCheck } from "lucide-react";
-
-const attendanceData = [
-  { day: "Mon", present: 45, absent: 5 },
-  { day: "Tue", present: 48, absent: 2 },
-  { day: "Wed", present: 44, absent: 6 },
-  { day: "Thu", present: 47, absent: 3 },
-  { day: "Fri", present: 42, absent: 8 },
-];
-
-const activityCompletionData = [
-  { week: "Week 1", rate: 85 },
-  { week: "Week 2", rate: 92 },
-  { week: "Week 3", rate: 78 },
-  { week: "Week 4", rate: 95 },
-];
-
-const documentComplianceData = [
-  { name: "Approved", value: 68, color: "hsl(var(--primary))" },
-  { name: "Pending", value: 22, color: "hsl(var(--warning))" },
-  { name: "Expired", value: 10, color: "hsl(var(--destructive))" },
-];
-
-const wellbeingIncidentsData = [
-  { month: "Jan", low: 5, medium: 2, high: 0 },
-  { month: "Feb", low: 3, medium: 1, high: 1 },
-  { month: "Mar", low: 7, medium: 3, high: 0 },
-  { month: "Apr", low: 4, medium: 2, high: 0 },
-];
-
-const userEngagementData = [
-  { week: "Week 1", teachers: 95, parents: 72 },
-  { week: "Week 2", teachers: 98, parents: 78 },
-  { week: "Week 3", teachers: 92, parents: 81 },
-  { week: "Week 4", teachers: 97, parents: 85 },
-];
+import { Download, TrendingUp, Users, ClipboardCheck, FileCheck, Loader2 } from "lucide-react";
+import { useChildren } from "@/hooks/useChildren";
+import { useUsers } from "@/hooks/useUsers";
+import { useActivityLogs } from "@/hooks/useActivityLogs";
+import { useMealLogs } from "@/hooks/useMealLogs";
+import { useWellbeingReports } from "@/hooks/useWellbeingReports";
+import { useDocuments } from "@/hooks/useDocuments";
 
 const ReportsAnalyticsPage = () => {
   const [dateRange, setDateRange] = useState("this-month");
+  
+  // Fetch real data
+  const { data: children = [], isLoading: loadingChildren } = useChildren();
+  const { data: users = [], isLoading: loadingUsers } = useUsers();
+  const { data: activityLogs = [], isLoading: loadingActivities } = useActivityLogs();
+  const { data: mealLogs = [], isLoading: loadingMeals } = useMealLogs();
+  const { data: wellbeingReports = [], isLoading: loadingReports } = useWellbeingReports();
+  const { data: documents = [], isLoading: loadingDocs } = useDocuments();
+
+  const isLoading = loadingChildren || loadingUsers || loadingActivities || loadingMeals || loadingReports || loadingDocs;
+
+  // Calculate stats
+  const teachers = users.filter(u => u.role === 'teacher');
+  const parents = users.filter(u => u.role === 'parent');
+  const totalStudents = children.length;
+  
+  // Activity completion rate
+  const today = new Date().toISOString().split('T')[0];
+  const todaysActivities = activityLogs.filter(log => log.log_date === today);
+  const activityCompletionRate = totalStudents > 0 
+    ? Math.round((todaysActivities.length / totalStudents) * 100) 
+    : 0;
+
+  // Document compliance
+  const approvedDocs = documents.filter(d => d.status === 'approved').length;
+  const pendingDocs = documents.filter(d => d.status === 'pending').length;
+  const expiredDocs = documents.filter(d => d.status === 'expired').length;
+  const totalDocs = documents.length;
+  const complianceRate = totalDocs > 0 ? Math.round((approvedDocs / totalDocs) * 100) : 0;
+
+  // Generate chart data from real data
+  const documentComplianceData = [
+    { name: "Approved", value: approvedDocs, color: "hsl(var(--primary))" },
+    { name: "Pending", value: pendingDocs, color: "hsl(var(--warning))" },
+    { name: "Expired", value: expiredDocs, color: "hsl(var(--destructive))" },
+  ].filter(d => d.value > 0);
+
+  // Group wellbeing reports by severity
+  const wellbeingBySeverity = wellbeingReports.reduce((acc, report) => {
+    const severity = report.severity || 'low';
+    acc[severity] = (acc[severity] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const wellbeingData = [
+    { severity: "Low", count: wellbeingBySeverity['low'] || 0 },
+    { severity: "Medium", count: wellbeingBySeverity['medium'] || 0 },
+    { severity: "High", count: wellbeingBySeverity['high'] || 0 },
+  ];
+
+  // Meal portion stats
+  const mealPortionStats = mealLogs.reduce((acc, meal) => {
+    const portion = meal.portion_consumed || 'some';
+    acc[portion] = (acc[portion] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const mealData = [
+    { portion: "All", count: mealPortionStats['all'] || 0 },
+    { portion: "Most", count: mealPortionStats['most'] || 0 },
+    { portion: "Some", count: mealPortionStats['some'] || 0 },
+    { portion: "None", count: mealPortionStats['none'] || 0 },
+  ];
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -100,11 +145,10 @@ const ReportsAnalyticsPage = () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Avg. Attendance</p>
-                  <p className="text-2xl font-bold">94.2%</p>
-                  <p className="text-xs text-green-600 flex items-center mt-1">
-                    <TrendingUp className="h-3 w-3 mr-1" />
-                    +2.3% from last month
+                  <p className="text-sm text-muted-foreground">Total Students</p>
+                  <p className="text-2xl font-bold">{totalStudents}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {teachers.length} teachers, {parents.length} parents
                   </p>
                 </div>
                 <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -117,11 +161,10 @@ const ReportsAnalyticsPage = () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Activity Completion</p>
-                  <p className="text-2xl font-bold">87.5%</p>
-                  <p className="text-xs text-green-600 flex items-center mt-1">
-                    <TrendingUp className="h-3 w-3 mr-1" />
-                    +5.1% from last month
+                  <p className="text-sm text-muted-foreground">Activity Logs Today</p>
+                  <p className="text-2xl font-bold">{todaysActivities.length}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {activityCompletionRate}% completion rate
                   </p>
                 </div>
                 <div className="h-12 w-12 bg-secondary/10 rounded-full flex items-center justify-center">
@@ -135,9 +178,9 @@ const ReportsAnalyticsPage = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Document Compliance</p>
-                  <p className="text-2xl font-bold">68%</p>
-                  <p className="text-xs text-amber-600 flex items-center mt-1">
-                    22 documents pending
+                  <p className="text-2xl font-bold">{complianceRate}%</p>
+                  <p className="text-xs text-amber-600">
+                    {pendingDocs} documents pending
                   </p>
                 </div>
                 <div className="h-12 w-12 bg-accent/10 rounded-full flex items-center justify-center">
@@ -150,92 +193,26 @@ const ReportsAnalyticsPage = () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Parent Engagement</p>
-                  <p className="text-2xl font-bold">79%</p>
-                  <p className="text-xs text-green-600 flex items-center mt-1">
-                    <TrendingUp className="h-3 w-3 mr-1" />
-                    +8.2% from last month
+                  <p className="text-sm text-muted-foreground">Wellbeing Reports</p>
+                  <p className="text-2xl font-bold">{wellbeingReports.length}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {wellbeingBySeverity['high'] || 0} high severity
                   </p>
                 </div>
                 <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
-                  <FileText className="h-6 w-6 text-primary" />
+                  <TrendingUp className="h-6 w-6 text-primary" />
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <Tabs defaultValue="attendance" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
-            <TabsTrigger value="attendance">Attendance</TabsTrigger>
-            <TabsTrigger value="activities">Activities</TabsTrigger>
+        <Tabs defaultValue="documents" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-3">
             <TabsTrigger value="documents">Documents</TabsTrigger>
             <TabsTrigger value="wellbeing">Wellbeing</TabsTrigger>
-            <TabsTrigger value="engagement">Engagement</TabsTrigger>
+            <TabsTrigger value="meals">Meals</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="attendance">
-            <Card>
-              <CardHeader>
-                <CardTitle>Weekly Attendance Overview</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[350px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={attendanceData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="day" className="text-xs" />
-                      <YAxis className="text-xs" />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Legend />
-                      <Bar dataKey="present" fill="hsl(var(--primary))" name="Present" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="absent" fill="hsl(var(--destructive))" name="Absent" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="activities">
-            <Card>
-              <CardHeader>
-                <CardTitle>Activity Log Completion Rate</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[350px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={activityCompletionData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="week" className="text-xs" />
-                      <YAxis className="text-xs" domain={[0, 100]} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="rate"
-                        stroke="hsl(var(--primary))"
-                        strokeWidth={3}
-                        dot={{ fill: "hsl(var(--primary))", strokeWidth: 2 }}
-                        name="Completion Rate %"
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           <TabsContent value="documents">
             <Card>
@@ -243,34 +220,38 @@ const ReportsAnalyticsPage = () => {
                 <CardTitle>Document Compliance Status</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-[350px] flex items-center justify-center">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={documentComplianceData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={80}
-                        outerRadius={120}
-                        paddingAngle={5}
-                        dataKey="value"
-                        label={({ name, value }) => `${name}: ${value}%`}
-                      >
-                        {documentComplianceData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
+                {documentComplianceData.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No documents found.</p>
+                ) : (
+                  <div className="h-[350px] flex items-center justify-center">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={documentComplianceData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={80}
+                          outerRadius={120}
+                          paddingAngle={5}
+                          dataKey="value"
+                          label={({ name, value }) => `${name}: ${value}`}
+                        >
+                          {documentComplianceData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "8px",
+                          }}
+                        />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -278,72 +259,61 @@ const ReportsAnalyticsPage = () => {
           <TabsContent value="wellbeing">
             <Card>
               <CardHeader>
-                <CardTitle>Wellbeing Incidents by Severity</CardTitle>
+                <CardTitle>Wellbeing Reports by Severity</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-[350px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={wellbeingIncidentsData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="month" className="text-xs" />
-                      <YAxis className="text-xs" />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Legend />
-                      <Bar dataKey="low" fill="hsl(var(--primary))" name="Low" stackId="a" radius={[0, 0, 0, 0]} />
-                      <Bar dataKey="medium" fill="hsl(var(--warning))" name="Medium" stackId="a" radius={[0, 0, 0, 0]} />
-                      <Bar dataKey="high" fill="hsl(var(--destructive))" name="High" stackId="a" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                {wellbeingReports.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No wellbeing reports found.</p>
+                ) : (
+                  <div className="h-[350px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={wellbeingData}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis dataKey="severity" className="text-xs" />
+                        <YAxis className="text-xs" />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "8px",
+                          }}
+                        />
+                        <Bar dataKey="count" fill="hsl(var(--primary))" name="Reports" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="engagement">
+          <TabsContent value="meals">
             <Card>
               <CardHeader>
-                <CardTitle>User Engagement Trends</CardTitle>
+                <CardTitle>Meal Portion Consumption</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-[350px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={userEngagementData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="week" className="text-xs" />
-                      <YAxis className="text-xs" domain={[0, 100]} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="teachers"
-                        stroke="hsl(var(--primary))"
-                        strokeWidth={3}
-                        dot={{ fill: "hsl(var(--primary))", strokeWidth: 2 }}
-                        name="Teachers %"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="parents"
-                        stroke="hsl(var(--secondary))"
-                        strokeWidth={3}
-                        dot={{ fill: "hsl(var(--secondary))", strokeWidth: 2 }}
-                        name="Parents %"
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+                {mealLogs.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No meal logs found.</p>
+                ) : (
+                  <div className="h-[350px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={mealData}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis dataKey="portion" className="text-xs" />
+                        <YAxis className="text-xs" />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "8px",
+                          }}
+                        />
+                        <Bar dataKey="count" fill="hsl(var(--primary))" name="Meals" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -358,7 +328,7 @@ const ReportsAnalyticsPage = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2">
                 <Users className="h-6 w-6" />
-                <span>Attendance Report</span>
+                <span>Student Report</span>
                 <span className="text-xs text-muted-foreground">PDF / Excel</span>
               </Button>
               <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2">
@@ -372,7 +342,7 @@ const ReportsAnalyticsPage = () => {
                 <span className="text-xs text-muted-foreground">PDF / Excel</span>
               </Button>
               <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2">
-                <FileText className="h-6 w-6" />
+                <TrendingUp className="h-6 w-6" />
                 <span>Incident Report</span>
                 <span className="text-xs text-muted-foreground">PDF / Excel</span>
               </Button>
