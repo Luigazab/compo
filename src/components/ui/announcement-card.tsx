@@ -1,12 +1,25 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { Announcement, getUserById } from '@/lib/mockData';
+import { useUser } from '@/hooks/useUsers';
 import { Pin, Calendar, Bell } from 'lucide-react';
 import { format } from 'date-fns';
 
+interface AnnouncementProps {
+  id: string;
+  title: string;
+  content: string;
+  authorId: string;
+  priority: 'low' | 'normal' | 'high';
+  eventDate?: string;
+  isPinned: boolean;
+  createdAt: string;
+  targetAudience?: string;
+  readBy?: string[];
+}
+
 interface AnnouncementCardProps {
-  announcement: Announcement;
+  announcement: AnnouncementProps;
   className?: string;
 }
 
@@ -14,7 +27,7 @@ export const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
   announcement,
   className,
 }) => {
-  const author = getUserById(announcement.authorId);
+  const { data: author } = useUser(announcement.authorId);
 
   const getPriorityStyles = () => {
     switch (announcement.priority) {
@@ -53,7 +66,7 @@ export const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
             {announcement.content}
           </p>
           <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-            <span>By {author?.name}</span>
+            <span>By {author?.full_name || 'Staff'}</span>
             <span>•</span>
             <span>{format(new Date(announcement.createdAt), 'MMM d, yyyy')}</span>
             {announcement.eventDate && (

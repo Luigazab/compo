@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -16,6 +17,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { 
+  useSchoolSettings, 
+  useUpsertSchoolSettings, 
+  useHolidays,
+  useCreateHoliday,
+  useDeleteHoliday,
+  useNotificationSettings,
+  useUpdateNotificationSetting
+} from '@/hooks/useSchoolSettings';
+import { useToast } from '@/hooks/use-toast';
 import { 
   Building2, 
   Clock, 
@@ -26,39 +37,171 @@ import {
   Save,
   Upload,
   Download,
-  FileText,
   Mail,
   Smartphone,
-  Globe
+  Loader2,
+  Trash2
 } from 'lucide-react';
+import { format } from 'date-fns';
 
 const SystemSettingsPage = () => {
+  const { toast } = useToast();
+  
+  // Fetch data
+  const { data: schoolSettings, isLoading: loadingSettings } = useSchoolSettings();
+  const { data: holidays = [], isLoading: loadingHolidays } = useHolidays();
+  const { data: notificationSettings = [], isLoading: loadingNotifications } = useNotificationSettings();
+  
+  // Mutations
+  const upsertSettings = useUpsertSchoolSettings();
+  const createHoliday = useCreateHoliday();
+  const deleteHoliday = useDeleteHoliday();
+  const updateNotificationSetting = useUpdateNotificationSetting();
+
+  // Local state for form
   const [daycareInfo, setDaycareInfo] = useState({
-    name: 'LittleSteps Daycare',
-    address: '123 Sunshine Lane, Happy Valley, CA 90210',
-    phone: '+1 (555) 123-4567',
-    email: 'contact@littlesteps.com',
-    website: 'www.littlesteps.com',
+    name: '',
+    address: '',
+    phone: '',
+    email: '',
+    website: '',
+    description: '',
+    timezone: 'America/New_York',
+    date_format: 'MM/DD/YYYY',
+    language: 'en',
   });
 
   const [operatingHours, setOperatingHours] = useState({
-    monday: { open: '07:00', close: '18:00', isOpen: true },
-    tuesday: { open: '07:00', close: '18:00', isOpen: true },
-    wednesday: { open: '07:00', close: '18:00', isOpen: true },
-    thursday: { open: '07:00', close: '18:00', isOpen: true },
-    friday: { open: '07:00', close: '18:00', isOpen: true },
-    saturday: { open: '08:00', close: '14:00', isOpen: false },
-    sunday: { open: '08:00', close: '14:00', isOpen: false },
+    open_time: '07:00',
+    close_time: '18:00',
+    work_days: ['mon', 'tue', 'wed', 'thu', 'fri'] as string[],
   });
 
-  const holidays = [
-    { date: '2024-01-01', name: "New Year's Day" },
-    { date: '2024-07-04', name: 'Independence Day' },
-    { date: '2024-11-28', name: 'Thanksgiving' },
-    { date: '2024-12-25', name: 'Christmas Day' },
-  ];
+  const [newHoliday, setNewHoliday] = useState({ name: '', date: '' });
+
+  // Sync with fetched data
+  useEffect(() => {
+    if (schoolSettings) {
+      setDaycareInfo({
+        name: schoolSettings.name || '',
+        address: schoolSettings.address || '',
+        phone: schoolSettings.phone || '',
+        email: schoolSettings.email || '',
+        website: schoolSettings.website || '',
+        description: schoolSettings.description || '',
+        timezone: schoolSettings.timezone || 'America/New_York',
+        date_format: schoolSettings.date_format || 'MM/DD/YYYY',
+        language: schoolSettings.language || 'en',
+      });
+      setOperatingHours({
+        open_time: schoolSettings.open_time?.substring(0, 5) || '07:00',
+        close_time: schoolSettings.close_time?.substring(0, 5) || '18:00',
+        work_days: schoolSettings.work_days || ['mon', 'tue', 'wed', 'thu', 'fri'],
+      });
+    }
+  }, [schoolSettings]);
+
+  const handleSaveSettings = async () => {
+    try {
+      await upsertSettings.mutateAsync({
+        name: daycareInfo.name,
+        address: daycareInfo.address,
+        phone: daycareInfo.phone,
+        email: daycareInfo.email,
+        website: daycareInfo.website,
+        description: daycareInfo.description,
+        timezone: daycareInfo.timezone,
+        date_format: daycareInfo.date_format,
+        language: daycareInfo.language,
+        open_time: operatingHours.open_time,
+        close_time: operatingHours.close_time,
+        work_days: operatingHours.work_days,
+      });
+      toast({
+        title: 'Settings saved',
+        description: 'Your changes have been saved successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to save settings.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleAddHoliday = async () => {
+    if (!newHoliday.name || !newHoliday.date) {
+      toast({
+        title: 'Missing fields',
+        description: 'Please enter both name and date for the holiday.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    try {
+      await createHoliday.mutateAsync(newHoliday);
+      setNewHoliday({ name: '', date: '' });
+      toast({
+        title: 'Holiday added',
+        description: `${newHoliday.name} has been added to the calendar.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to add holiday.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleRemoveHoliday = async (id: string) => {
+    try {
+      await deleteHoliday.mutateAsync(id);
+      toast({
+        title: 'Holiday removed',
+        description: 'The holiday has been removed from the calendar.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to remove holiday.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleNotificationToggle = async (key: string, value: boolean) => {
+    try {
+      await updateNotificationSetting.mutateAsync({ key, value });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update notification setting.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const getNotificationValue = (key: string) => {
+    const setting = notificationSettings.find(s => s.setting_key === key);
+    return setting?.setting_value ?? true;
+  };
 
   const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+  const isLoading = loadingSettings || loadingHolidays || loadingNotifications;
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -66,20 +209,23 @@ const SystemSettingsPage = () => {
         title="System Settings"
         description="Configure your daycare portal settings"
         actions={
-          <Button>
-            <Save className="w-4 h-4 mr-2" />
+          <Button onClick={handleSaveSettings} disabled={upsertSettings.isPending}>
+            {upsertSettings.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4 mr-2" />
+            )}
             Save All Changes
           </Button>
         }
       />
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid grid-cols-2 md:grid-cols-6 w-full">
+        <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="hours">Hours</TabsTrigger>
           <TabsTrigger value="holidays">Holidays</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="backup">Backup</TabsTrigger>
         </TabsList>
 
@@ -145,41 +291,51 @@ const SystemSettingsPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label>Timezone</Label>
-                    <Select defaultValue="pst">
+                    <Select 
+                      value={daycareInfo.timezone} 
+                      onValueChange={(v) => setDaycareInfo({...daycareInfo, timezone: v})}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="pst">Pacific Time (PST)</SelectItem>
-                        <SelectItem value="mst">Mountain Time (MST)</SelectItem>
-                        <SelectItem value="cst">Central Time (CST)</SelectItem>
-                        <SelectItem value="est">Eastern Time (EST)</SelectItem>
+                        <SelectItem value="America/Los_Angeles">Pacific Time (PST)</SelectItem>
+                        <SelectItem value="America/Denver">Mountain Time (MST)</SelectItem>
+                        <SelectItem value="America/Chicago">Central Time (CST)</SelectItem>
+                        <SelectItem value="America/New_York">Eastern Time (EST)</SelectItem>
+                        <SelectItem value="Asia/Manila">Philippine Time (PHT)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Date Format</Label>
-                    <Select defaultValue="mdy">
+                    <Select 
+                      value={daycareInfo.date_format} 
+                      onValueChange={(v) => setDaycareInfo({...daycareInfo, date_format: v})}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="mdy">MM/DD/YYYY</SelectItem>
-                        <SelectItem value="dmy">DD/MM/YYYY</SelectItem>
-                        <SelectItem value="ymd">YYYY-MM-DD</SelectItem>
+                        <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
+                        <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
+                        <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Language</Label>
-                    <Select defaultValue="en">
+                    <Select 
+                      value={daycareInfo.language} 
+                      onValueChange={(v) => setDaycareInfo({...daycareInfo, language: v})}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="en">English</SelectItem>
                         <SelectItem value="es">Español</SelectItem>
-                        <SelectItem value="fr">Français</SelectItem>
+                        <SelectItem value="tl">Filipino</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -220,53 +376,50 @@ const SystemSettingsPage = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {days.map((day) => (
-                  <div key={day} className="flex items-center gap-4 py-3 border-b last:border-0">
-                    <div className="w-28">
-                      <span className="font-medium capitalize">{day}</span>
-                    </div>
-                    <Switch 
-                      checked={operatingHours[day as keyof typeof operatingHours].isOpen}
-                      onCheckedChange={(checked) => 
-                        setOperatingHours({
-                          ...operatingHours,
-                          [day]: { ...operatingHours[day as keyof typeof operatingHours], isOpen: checked }
-                        })
-                      }
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Opening Time</Label>
+                    <Input 
+                      type="time" 
+                      value={operatingHours.open_time}
+                      onChange={(e) => setOperatingHours({...operatingHours, open_time: e.target.value})}
                     />
-                    <div className="flex items-center gap-2 flex-1">
-                      <Input 
-                        type="time" 
-                        value={operatingHours[day as keyof typeof operatingHours].open}
-                        disabled={!operatingHours[day as keyof typeof operatingHours].isOpen}
-                        className="w-32"
-                        onChange={(e) => 
-                          setOperatingHours({
-                            ...operatingHours,
-                            [day]: { ...operatingHours[day as keyof typeof operatingHours], open: e.target.value }
-                          })
-                        }
-                      />
-                      <span className="text-muted-foreground">to</span>
-                      <Input 
-                        type="time" 
-                        value={operatingHours[day as keyof typeof operatingHours].close}
-                        disabled={!operatingHours[day as keyof typeof operatingHours].isOpen}
-                        className="w-32"
-                        onChange={(e) => 
-                          setOperatingHours({
-                            ...operatingHours,
-                            [day]: { ...operatingHours[day as keyof typeof operatingHours], close: e.target.value }
-                          })
-                        }
-                      />
-                    </div>
-                    <Badge variant={operatingHours[day as keyof typeof operatingHours].isOpen ? "default" : "secondary"}>
-                      {operatingHours[day as keyof typeof operatingHours].isOpen ? 'Open' : 'Closed'}
-                    </Badge>
                   </div>
-                ))}
+                  <div className="space-y-2">
+                    <Label>Closing Time</Label>
+                    <Input 
+                      type="time" 
+                      value={operatingHours.close_time}
+                      onChange={(e) => setOperatingHours({...operatingHours, close_time: e.target.value})}
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Operating Days</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => {
+                          const newDays = operatingHours.work_days.includes(day)
+                            ? operatingHours.work_days.filter(d => d !== day)
+                            : [...operatingHours.work_days, day];
+                          setOperatingHours({...operatingHours, work_days: newDays});
+                        }}
+                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                          operatingHours.work_days.includes(day)
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        }`}
+                      >
+                        {day.charAt(0).toUpperCase() + day.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -287,23 +440,45 @@ const SystemSettingsPage = () => {
             <CardContent>
               <div className="space-y-4">
                 <div className="flex gap-4">
-                  <Input type="date" className="w-48" />
-                  <Input placeholder="Holiday name" className="flex-1" />
-                  <Button>Add Holiday</Button>
+                  <Input 
+                    type="date" 
+                    className="w-48" 
+                    value={newHoliday.date}
+                    onChange={(e) => setNewHoliday({...newHoliday, date: e.target.value})}
+                  />
+                  <Input 
+                    placeholder="Holiday name" 
+                    className="flex-1" 
+                    value={newHoliday.name}
+                    onChange={(e) => setNewHoliday({...newHoliday, name: e.target.value})}
+                  />
+                  <Button onClick={handleAddHoliday} disabled={createHoliday.isPending}>
+                    {createHoliday.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add Holiday'}
+                  </Button>
                 </div>
                 <div className="space-y-2 pt-4">
-                  {holidays.map((holiday, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <div className="flex items-center gap-4">
-                        <Calendar className="w-4 h-4 text-muted-foreground" />
-                        <span className="font-medium">{holiday.name}</span>
-                        <Badge variant="outline">{holiday.date}</Badge>
+                  {holidays.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-4">No holidays configured yet.</p>
+                  ) : (
+                    holidays.map((holiday) => (
+                      <div key={holiday.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                        <div className="flex items-center gap-4">
+                          <Calendar className="w-4 h-4 text-muted-foreground" />
+                          <span className="font-medium">{holiday.name}</span>
+                          <Badge variant="outline">{format(new Date(holiday.date), 'MMM d, yyyy')}</Badge>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-destructive"
+                          onClick={() => handleRemoveHoliday(holiday.id)}
+                          disabled={deleteHoliday.isPending}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
-                      <Button variant="ghost" size="sm" className="text-destructive">
-                        Remove
-                      </Button>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -334,28 +509,40 @@ const SystemSettingsPage = () => {
                       <Label>Daily Activity Summary</Label>
                       <p className="text-sm text-muted-foreground">Send parents a daily summary of their child's activities</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={getNotificationValue('email_daily_summary')}
+                      onCheckedChange={(checked) => handleNotificationToggle('email_daily_summary', checked)}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <Label>Wellbeing Alerts</Label>
                       <p className="text-sm text-muted-foreground">Immediately notify parents of wellbeing incidents</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={getNotificationValue('email_wellbeing_alerts')}
+                      onCheckedChange={(checked) => handleNotificationToggle('email_wellbeing_alerts', checked)}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <Label>Announcement Emails</Label>
                       <p className="text-sm text-muted-foreground">Send email notifications for new announcements</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={getNotificationValue('email_announcements')}
+                      onCheckedChange={(checked) => handleNotificationToggle('email_announcements', checked)}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <Label>Document Reminders</Label>
                       <p className="text-sm text-muted-foreground">Send reminders for pending document submissions</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={getNotificationValue('email_document_reminders')}
+                      onCheckedChange={(checked) => handleNotificationToggle('email_document_reminders', checked)}
+                    />
                   </div>
                 </div>
               </div>
@@ -371,113 +558,21 @@ const SystemSettingsPage = () => {
                       <Label>New Messages</Label>
                       <p className="text-sm text-muted-foreground">Notify users of new messages</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={getNotificationValue('push_new_messages')}
+                      onCheckedChange={(checked) => handleNotificationToggle('push_new_messages', checked)}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <Label>Photo Uploads</Label>
                       <p className="text-sm text-muted-foreground">Notify parents when new photos are uploaded</p>
                     </div>
-                    <Switch />
+                    <Switch 
+                      checked={getNotificationValue('push_photo_uploads')}
+                      onCheckedChange={(checked) => handleNotificationToggle('push_photo_uploads', checked)}
+                    />
                   </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Security */}
-        <TabsContent value="security">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="w-5 h-5" />
-                Security Settings
-              </CardTitle>
-              <CardDescription>
-                Configure security and privacy settings
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <h3 className="font-medium">Password Policy</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-4">
-                  <div className="space-y-2">
-                    <Label>Minimum Password Length</Label>
-                    <Select defaultValue="8">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="6">6 characters</SelectItem>
-                        <SelectItem value="8">8 characters</SelectItem>
-                        <SelectItem value="10">10 characters</SelectItem>
-                        <SelectItem value="12">12 characters</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Password Expiry</Label>
-                    <Select defaultValue="never">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="30">30 days</SelectItem>
-                        <SelectItem value="60">60 days</SelectItem>
-                        <SelectItem value="90">90 days</SelectItem>
-                        <SelectItem value="never">Never</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pl-4">
-                  <div>
-                    <Label>Require Special Characters</Label>
-                    <p className="text-sm text-muted-foreground">Passwords must contain special characters</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-              </div>
-
-              <div className="space-y-4 pt-4 border-t">
-                <h3 className="font-medium">Session Settings</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-4">
-                  <div className="space-y-2">
-                    <Label>Session Timeout</Label>
-                    <Select defaultValue="60">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="15">15 minutes</SelectItem>
-                        <SelectItem value="30">30 minutes</SelectItem>
-                        <SelectItem value="60">1 hour</SelectItem>
-                        <SelectItem value="120">2 hours</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pl-4">
-                  <div>
-                    <Label>Two-Factor Authentication</Label>
-                    <p className="text-sm text-muted-foreground">Require 2FA for admin accounts</p>
-                  </div>
-                  <Switch />
-                </div>
-              </div>
-
-              <div className="space-y-4 pt-4 border-t">
-                <h3 className="font-medium">Legal Documents</h3>
-                <div className="flex gap-4 pl-4">
-                  <Button variant="outline">
-                    <FileText className="w-4 h-4 mr-2" />
-                    Terms of Service
-                  </Button>
-                  <Button variant="outline">
-                    <FileText className="w-4 h-4 mr-2" />
-                    Privacy Policy
-                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -490,72 +585,28 @@ const SystemSettingsPage = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Database className="w-5 h-5" />
-                Backup & Data Export
+                Backup & Data
               </CardTitle>
               <CardDescription>
-                Manage data backups and exports
+                Export and manage your data
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <h3 className="font-medium">Automatic Backups</h3>
-                <div className="flex items-center justify-between pl-4">
-                  <div>
-                    <Label>Enable Automatic Backups</Label>
-                    <p className="text-sm text-muted-foreground">Automatically backup data daily</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="pl-4 space-y-2">
-                  <Label>Backup Retention</Label>
-                  <Select defaultValue="30">
-                    <SelectTrigger className="w-48">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="7">7 days</SelectItem>
-                      <SelectItem value="14">14 days</SelectItem>
-                      <SelectItem value="30">30 days</SelectItem>
-                      <SelectItem value="90">90 days</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2">
+                  <Download className="h-6 w-6" />
+                  <span>Export All Data</span>
+                  <span className="text-xs text-muted-foreground">Download complete backup</span>
+                </Button>
+                <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2">
+                  <Database className="h-6 w-6" />
+                  <span>Export Student Records</span>
+                  <span className="text-xs text-muted-foreground">Student data only</span>
+                </Button>
               </div>
-
-              <div className="space-y-4 pt-4 border-t">
-                <h3 className="font-medium">Manual Backup</h3>
-                <div className="flex gap-4 pl-4">
-                  <Button>
-                    <Download className="w-4 h-4 mr-2" />
-                    Create Backup Now
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground pl-4">
-                  Last backup: December 29, 2024 at 3:00 AM
-                </p>
-              </div>
-
-              <div className="space-y-4 pt-4 border-t">
-                <h3 className="font-medium">Data Export</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-4">
-                  <Button variant="outline">
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Students (CSV)
-                  </Button>
-                  <Button variant="outline">
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Activity Logs
-                  </Button>
-                  <Button variant="outline">
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Meal Records
-                  </Button>
-                  <Button variant="outline">
-                    <Download className="w-4 h-4 mr-2" />
-                    Export All Data
-                  </Button>
-                </div>
-              </div>
+              <p className="text-sm text-muted-foreground">
+                Data exports are generated as CSV files that can be opened in Excel or imported into other systems.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>

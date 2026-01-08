@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader } from '@/components/ui/page-header';
@@ -7,45 +7,42 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ActivityCard } from '@/components/ui/activity-card';
 import { MealCard } from '@/components/ui/meal-card';
-import { 
-  getChildById, 
-  getClassroomById, 
-  getUserById,
-  getActivityLogsByChild,
-  getMealLogsByChild,
-  getWellbeingReportsByChild,
-  getDocumentsByChild
-} from '@/lib/mockData';
+import { useChild } from '@/hooks/useChildren';
+import { useClassroom } from '@/hooks/useClassrooms';
+import { useUser } from '@/hooks/useUsers';
+import { useActivityLogs } from '@/hooks/useActivityLogs';
+import { useMealLogs } from '@/hooks/useMealLogs';
+import { useWellbeingReports } from '@/hooks/useWellbeingReports';
+import { useDocuments } from '@/hooks/useDocuments';
 import { 
   MessageSquare, 
-  Calendar, 
   AlertTriangle,
   Phone,
-  Mail,
-  Clock,
   FileText,
   Heart,
   Utensils,
   ClipboardList,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 const ChildProfilePage: React.FC = () => {
   const { childId } = useParams<{ childId: string }>();
-  const child = getChildById(childId || '');
-  const classroom = child ? getClassroomById(child.classroomId) : null;
-  const teacher = classroom ? getUserById(classroom.teacherId) : null;
   
-  const activityLogs = child ? getActivityLogsByChild(child.id) : [];
-  const mealLogs = child ? getMealLogsByChild(child.id) : [];
-  const wellbeingReports = child ? getWellbeingReportsByChild(child.id) : [];
-  const documents = child ? getDocumentsByChild(child.id) : [];
+  const { data: child, isLoading: loadingChild } = useChild(childId);
+  const { data: classroom } = useClassroom(child?.classroom_id || undefined);
+  const { data: teacher } = useUser(classroom?.teacher_id || undefined);
+  const { data: activityLogs = [], isLoading: loadingActivities } = useActivityLogs(childId);
+  const { data: mealLogs = [], isLoading: loadingMeals } = useMealLogs(childId);
+  const { data: wellbeingReports = [], isLoading: loadingReports } = useWellbeingReports(childId);
+  const { data: documents = [], isLoading: loadingDocs } = useDocuments(childId);
 
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase();
 
@@ -64,7 +61,7 @@ const ChildProfilePage: React.FC = () => {
     }
   };
 
-  const getSeverityBadge = (severity: string) => {
+  const getSeverityBadge = (severity: string | null) => {
     const styles = {
       low: 'bg-success/10 text-success',
       medium: 'bg-warning/10 text-warning',
@@ -72,6 +69,16 @@ const ChildProfilePage: React.FC = () => {
     };
     return styles[severity as keyof typeof styles] || styles.low;
   };
+
+  if (loadingChild) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   if (!child) {
     return (
@@ -83,10 +90,14 @@ const ChildProfilePage: React.FC = () => {
     );
   }
 
+  const fullName = `${child.first_name} ${child.last_name}`;
+  const age = Math.floor((Date.now() - new Date(child.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+  const allergies = child.allergies ? child.allergies.split(',').map(a => a.trim()) : [];
+
   return (
     <DashboardLayout>
       <PageHeader
-        title={child.name}
+        title={fullName}
         description="View your child's profile and history"
       />
 
@@ -97,32 +108,32 @@ const ChildProfilePage: React.FC = () => {
             <div className="text-center mb-6">
               <Avatar className="h-24 w-24 mx-auto mb-4">
                 <AvatarFallback className="bg-primary/10 text-primary text-2xl font-bold">
-                  {getInitials(child.name)}
+                  {getInitials(fullName)}
                 </AvatarFallback>
               </Avatar>
-              <h2 className="text-xl font-bold">{child.name}</h2>
-              <p className="text-muted-foreground">{child.age} years old</p>
+              <h2 className="text-xl font-bold">{fullName}</h2>
+              <p className="text-muted-foreground">{age} years old</p>
               <p className="text-sm text-muted-foreground">
-                DOB: {format(parseISO(child.dateOfBirth), 'MMMM d, yyyy')}
+                DOB: {format(new Date(child.date_of_birth), 'MMMM d, yyyy')}
               </p>
             </div>
 
             {/* Allergies */}
-            {child.allergies.length > 0 && (
+            {allergies.length > 0 && (
               <div className="mb-6 p-4 bg-warning/10 rounded-xl">
                 <div className="flex items-center gap-2 mb-2">
                   <AlertTriangle className="h-4 w-4 text-warning" />
                   <span className="font-semibold text-warning">Allergies</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {child.allergies.map(allergy => (
+                  {allergies.map(allergy => (
                     <Badge key={allergy} variant="outline" className="border-warning text-warning">
                       {allergy}
                     </Badge>
                   ))}
                 </div>
-                {child.medicalNotes && (
-                  <p className="text-sm text-muted-foreground mt-2">{child.medicalNotes}</p>
+                {child.medical_notes && (
+                  <p className="text-sm text-muted-foreground mt-2">{child.medical_notes}</p>
                 )}
               </div>
             )}
@@ -131,8 +142,8 @@ const ChildProfilePage: React.FC = () => {
             <div className="space-y-4">
               <div className="p-4 bg-muted rounded-xl">
                 <h3 className="font-semibold mb-2">Classroom</h3>
-                <p className="text-foreground">{classroom?.name}</p>
-                <p className="text-sm text-muted-foreground">{classroom?.ageGroup}</p>
+                <p className="text-foreground">{classroom?.name || 'Not assigned'}</p>
+                <p className="text-sm text-muted-foreground">{classroom?.age_group || ''}</p>
               </div>
 
               {teacher && (
@@ -141,11 +152,11 @@ const ChildProfilePage: React.FC = () => {
                   <div className="flex items-center gap-3 mb-3">
                     <Avatar className="h-10 w-10">
                       <AvatarFallback className="bg-primary/10 text-primary">
-                        {getInitials(teacher.name)}
+                        {getInitials(teacher.full_name)}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium">{teacher.name}</p>
+                      <p className="font-medium">{teacher.full_name}</p>
                       <p className="text-sm text-muted-foreground">{teacher.email}</p>
                     </div>
                   </div>
@@ -159,15 +170,16 @@ const ChildProfilePage: React.FC = () => {
               )}
 
               {/* Emergency Contact */}
-              <div className="p-4 bg-muted rounded-xl">
-                <h3 className="font-semibold mb-2">Emergency Contact</h3>
-                <p className="font-medium">{child.emergencyContact.name}</p>
-                <p className="text-sm text-muted-foreground">{child.emergencyContact.relationship}</p>
-                <div className="flex items-center gap-2 mt-2 text-sm">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span>{child.emergencyContact.phone}</span>
+              {child.emergency_contact && (
+                <div className="p-4 bg-muted rounded-xl">
+                  <h3 className="font-semibold mb-2">Emergency Contact</h3>
+                  <p className="font-medium">{child.emergency_contact}</p>
+                  <div className="flex items-center gap-2 mt-2 text-sm">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span>{child.emergency_contact}</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -198,35 +210,63 @@ const ChildProfilePage: React.FC = () => {
             
             <CardContent className="pt-6">
               <TabsContent value="activities" className="mt-0 space-y-4">
-                {activityLogs.length === 0 ? (
+                {loadingActivities ? (
+                  <div className="space-y-3">
+                    {[1, 2].map(i => <Skeleton key={i} className="h-32 w-full" />)}
+                  </div>
+                ) : activityLogs.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">No activity logs yet</p>
                 ) : (
-                  activityLogs.map(log => (
-                    <ActivityCard key={log.id} activity={log} />
+                  activityLogs.slice(0, 5).map(log => (
+                    <ActivityCard 
+                      key={log.id} 
+                      activity={{
+                        id: log.id,
+                        childId: log.child_id,
+                        date: log.log_date,
+                        arrivalTime: log.arrival_time || undefined,
+                        pickupTime: log.pickup_time || undefined,
+                        activities: log.activities || '',
+                        mood: log.mood || 'happy',
+                        napDuration: log.nap_duration || undefined,
+                        notes: log.general_notes || undefined,
+                      }} 
+                    />
                   ))
                 )}
               </TabsContent>
 
               <TabsContent value="meals" className="mt-0 space-y-4">
-                {mealLogs.length === 0 ? (
+                {loadingMeals ? (
+                  <div className="space-y-3">
+                    {[1, 2].map(i => <Skeleton key={i} className="h-24 w-full" />)}
+                  </div>
+                ) : mealLogs.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">No meal logs yet</p>
                 ) : (
-                  mealLogs.map(meal => (
-                    <MealCard key={meal.id} meal={{
-                      id: meal.id,
-                      childId: meal.childId,
-                      date: meal.date,
-                      mealType: meal.mealType,
-                      foods: meal.foodItems,
-                      portionEaten: meal.portionConsumed,
-                      notes: meal.notes,
-                    }} />
+                  mealLogs.slice(0, 5).map(meal => (
+                    <MealCard 
+                      key={meal.id} 
+                      meal={{
+                        id: meal.id,
+                        childId: meal.child_id,
+                        date: meal.meal_date,
+                        mealType: meal.meal_type || 'lunch',
+                        foods: meal.food_items.split(',').map(f => f.trim()),
+                        portionEaten: meal.portion_consumed || 'some',
+                        notes: meal.notes || undefined,
+                      }} 
+                    />
                   ))
                 )}
               </TabsContent>
 
               <TabsContent value="wellbeing" className="mt-0 space-y-4">
-                {wellbeingReports.length === 0 ? (
+                {loadingReports ? (
+                  <div className="space-y-3">
+                    {[1, 2].map(i => <Skeleton key={i} className="h-32 w-full" />)}
+                  </div>
+                ) : wellbeingReports.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">No wellbeing reports</p>
                 ) : (
                   wellbeingReports.map(report => (
@@ -234,24 +274,26 @@ const ChildProfilePage: React.FC = () => {
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <Badge className={getSeverityBadge(report.severity)}>
-                            {report.severity.toUpperCase()}
+                            {(report.severity || 'low').toUpperCase()}
                           </Badge>
                           <Badge variant="outline" className="ml-2 capitalize">
-                            {report.type}
+                            {report.incident_type || 'other'}
                           </Badge>
                         </div>
                         <span className="text-sm text-muted-foreground">
-                          {format(parseISO(report.date), 'MMM d, yyyy')} at {report.time}
+                          {format(new Date(report.report_date), 'MMM d, yyyy')}
                         </span>
                       </div>
                       <p className="text-foreground mb-2">{report.description}</p>
-                      <p className="text-sm text-muted-foreground">
-                        <strong>Action taken:</strong> {report.actionTaken}
-                      </p>
-                      {report.acknowledged && (
+                      {report.action_taken && (
+                        <p className="text-sm text-muted-foreground">
+                          <strong>Action taken:</strong> {report.action_taken}
+                        </p>
+                      )}
+                      {report.parent_notified && (
                         <Badge className="mt-2 bg-success/10 text-success">
                           <CheckCircle className="h-3 w-3 mr-1" />
-                          Acknowledged
+                          Parent Notified
                         </Badge>
                       )}
                     </div>
@@ -260,16 +302,20 @@ const ChildProfilePage: React.FC = () => {
               </TabsContent>
 
               <TabsContent value="documents" className="mt-0 space-y-3">
-                {documents.length === 0 ? (
+                {loadingDocs ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+                  </div>
+                ) : documents.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">No documents</p>
                 ) : (
                   documents.map(doc => (
                     <div key={doc.id} className="flex items-center justify-between p-4 bg-muted rounded-xl">
                       <div className="flex items-center gap-3">
-                        {getDocStatusIcon(doc.status)}
+                        {getDocStatusIcon(doc.status || 'pending')}
                         <div>
-                          <p className="font-medium">{doc.name}</p>
-                          <p className="text-sm text-muted-foreground capitalize">{doc.type}</p>
+                          <p className="font-medium">{doc.document_type}</p>
+                          <p className="text-sm text-muted-foreground capitalize">Required Document</p>
                         </div>
                       </div>
                       <div className="text-right">
@@ -282,9 +328,9 @@ const ChildProfilePage: React.FC = () => {
                         )}>
                           {doc.status}
                         </Badge>
-                        {doc.dueDate && (
+                        {doc.due_date && (
                           <p className="text-xs text-muted-foreground mt-1">
-                            Due: {format(parseISO(doc.dueDate), 'MMM d, yyyy')}
+                            Due: {format(new Date(doc.due_date), 'MMM d, yyyy')}
                           </p>
                         )}
                       </div>

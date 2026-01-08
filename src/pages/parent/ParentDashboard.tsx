@@ -221,11 +221,13 @@ const ParentDashboard: React.FC = () => {
                     id: ann.id,
                     title: ann.title,
                     content: ann.content,
-                    priority: ann.priority as 'low' | 'normal' | 'high',
+                    priority: (ann.priority as 'low' | 'normal' | 'high') || 'normal',
                     createdAt: ann.created_at || new Date().toISOString(),
                     authorId: ann.created_by,
                     isPinned: ann.is_pinned || false,
-                    eventDate: ann.event_date || undefined
+                    eventDate: ann.event_date || undefined,
+                    targetAudience: 'everyone',
+                    readBy: []
                   }} 
                 />
               ))
