@@ -41,8 +41,8 @@
   color: #888;
 }
 
-input[type="password"]::-ms-reveal,
-input[type="password"]::-ms-clear,
-input[type="password"]::-webkit-textfield-decoration-container {
+Input[type="password"]::-ms-reveal,
+Input[type="password"]::-ms-clear,
+Input[type="password"]::-webkit-textfield-decoration-container {
   display: none;
 }

@@ -27,7 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   Plus, 
   Search, 
@@ -35,34 +35,276 @@ import {
   Mail, 
   Phone, 
   Users, 
-  Send,
-  Eye,
   Edit,
   Trash2,
-  Link
+  Link as LinkIcon,
+  Loader2
 } from 'lucide-react';
-import { mockUsers, mockChildren } from '@/lib/mockData';
+import { useParents, useDeactivateUser } from '@/hooks/useUsers';
+import { useChildren } from '@/hooks/useChildren';
+import { useCreateChildParent, useDeleteChildParent } from '@/hooks/useChildParent';
+import { useCreateUser } from '@/hooks/useAdminUsers';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/components/ui/use-toast';
+
+interface ParentWithChildren {
+  id: string;
+  email: string;
+  full_name: string;
+  phone: string | null;
+  last_login: string | null;
+  is_active: boolean;
+  children: Array<{
+    id: string;
+    first_name: string;
+    last_name: string;
+    classroom_id: string | null;
+  }>;
+}
 
 const ParentManagementPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isLinkChildDialogOpen, setIsLinkChildDialogOpen] = useState(false);
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
+  const [selectedChildForLink, setSelectedChildForLink] = useState<string | null>(null);
+  
+  // Form state
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
 
-  const parents = mockUsers.filter(user => user.role === 'parent');
+  const { toast } = useToast();
+  
+  // Hooks
+  const { data: parents = [], isLoading: loadingParents, refetch: refetchParents } = useParents();
+  const { data: allChildren = [], isLoading: loadingChildren } = useChildren();
+  const createUser = useCreateUser();
+  const createChildParent = useCreateChildParent();
+  const deleteChildParent = useDeleteChildParent();
+  const deactivateUser = useDeactivateUser();
 
-  const filteredParents = parents.filter(parent =>
-    parent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  // Get children linked to each parent
+  const [parentsWithChildren, setParentsWithChildren] = useState<ParentWithChildren[]>([]);
+  
+  React.useEffect(() => {
+    const fetchParentsWithChildren = async () => {
+      if (!parents.length) return;
+      
+      const parentsData = await Promise.all(
+        parents.map(async (parent) => {
+          const { data: links } = await supabase
+            .from('child_parent')
+            .select(`
+              child_id,
+              children:child_id (
+                id,
+                first_name,
+                last_name,
+                classroom_id
+              )
+            `)
+            .eq('parent_id', parent.id);
+          
+          const children = links?.map(link => link.children).filter(Boolean) || [];
+          
+          return {
+            ...parent,
+            children
+          } as ParentWithChildren;
+        })
+      );
+      
+      setParentsWithChildren(parentsData);
+    };
+    
+    fetchParentsWithChildren();
+  }, [parents]);
+
+  const filteredParents = parentsWithChildren.filter(parent =>
+    parent.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     parent.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const getChildrenForParent = (parentId: string) => {
-    return mockChildren.filter(child => child.parentIds.includes(parentId));
-  };
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
+
+  const generatePassword = () => {
+    const length = 12;
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+    let password = '';
+    for (let i = 0; i < length; i++) {
+      password += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+    return password;
+  };
+
+  const handleAddParent = async () => {
+    if (!firstName || !lastName || !email) {
+      toast({
+        title: "Missing fields",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const tempPassword = password || generatePassword();
+      
+      await createUser.mutateAsync({
+        email,
+        password: tempPassword,
+        full_name: `${firstName} ${lastName}`,
+        role: 'parent',
+        phone: phone || undefined
+      });
+
+      toast({
+        title: "Success",
+        description: `Parent added successfully. ${!password ? 'They will receive a confirmation email.' : ''}`
+      });
+
+      // Reset form
+      setFirstName('');
+      setLastName('');
+      setEmail('');
+      setPhone('');
+      setPassword('');
+      setIsAddDialogOpen(false);
+      
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add parent",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleLinkChild = async () => {
+    if (!selectedParent || !selectedChildForLink) {
+      toast({
+        title: "Missing selection",
+        description: "Please select a child to link",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check if already linked
+    const parent = parentsWithChildren.find(p => p.id === selectedParent);
+    if (parent?.children.some(c => c.id === selectedChildForLink)) {
+      toast({
+        title: "Already linked",
+        description: "This child is already linked to the parent",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      await createChildParent.mutateAsync({
+        child_id: selectedChildForLink,
+        parent_id: selectedParent,
+        relationship: 'guardian',
+        is_primary: false
+      });
+
+      toast({
+        title: "Success",
+        description: "Child linked to parent successfully"
+      });
+
+      setIsLinkChildDialogOpen(false);
+      setSelectedChildForLink(null);
+      refetchParents();
+      
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to link child",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleUnlinkChild = async (parentId: string, childId: string) => {
+    if (!confirm('Are you sure you want to unlink this child from the parent?')) {
+      return;
+    }
+
+    try {
+      await deleteChildParent.mutateAsync({ childId, parentId });
+      
+      toast({
+        title: "Success",
+        description: "Child unlinked successfully"
+      });
+      
+      refetchParents();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to unlink child",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteParent = async (parentId: string) => {
+    if (!confirm('Are you sure you want to deactivate this parent account?')) {
+      return;
+    }
+
+    try {
+      await deactivateUser.mutateAsync(parentId);
+
+      toast({
+        title: "Success",
+        description: "Parent account deactivated"
+      });
+      
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to deactivate parent",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const formatLastLogin = (lastLogin: string | null) => {
+    if (!lastLogin) return 'Never';
+    
+    const date = new Date(lastLogin);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Calculate stats
+  const activeParents = parentsWithChildren.filter(p => p.is_active).length;
+  const unlinkedParents = parentsWithChildren.filter(p => p.children.length === 0).length;
+
+  if (loadingParents || loadingChildren) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -71,10 +313,6 @@ const ParentManagementPage = () => {
         description="Manage parent accounts and link them to children"
         actions={
           <div className="flex gap-2">
-            <Button variant="outline">
-              <Send className="w-4 h-4 mr-2" />
-              Send Invitations
-            </Button>
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -89,38 +327,83 @@ const ParentManagementPage = () => {
                 <div className="space-y-4 py-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="firstName">First Name</Label>
-                      <Input id="firstName" placeholder="First name" />
+                      <Label htmlFor="firstName">First Name *</Label>
+                      <Input 
+                        id="firstName" 
+                        placeholder="First name"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="lastName">Last Name</Label>
-                      <Input id="lastName" placeholder="Last name" />
+                      <Label htmlFor="lastName">Last Name *</Label>
+                      <Input 
+                        id="lastName" 
+                        placeholder="Last name"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" placeholder="parent@email.com" />
+                    <Label htmlFor="email">Email *</Label>
+                    <Input 
+                      id="email" 
+                      type="email" 
+                      placeholder="parent@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone Number</Label>
-                    <Input id="phone" type="tel" placeholder="+1 (555) 000-0000" />
+                    <Input 
+                      id="phone" 
+                      type="tel" 
+                      placeholder="+1 (555) 000-0000"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="address">Address</Label>
-                    <Input id="address" placeholder="Home address" />
+                    <Label htmlFor="password">
+                      Temporary Password <span className="text-muted-foreground text-xs">(leave empty to auto-generate)</span>
+                    </Label>
+                    <Input 
+                      id="password" 
+                      type="password" 
+                      placeholder="Optional"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <input type="checkbox" id="sendInvite" className="rounded" defaultChecked />
-                    <label htmlFor="sendInvite" className="text-sm font-normal">
-                      Send registration invitation email
-                    </label>
+                  <div className="text-xs text-muted-foreground">
+                    * Parent will receive a confirmation email to verify their account
                   </div>
                   <div className="flex justify-end gap-2 pt-4">
-                    <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setIsAddDialogOpen(false);
+                        setFirstName('');
+                        setLastName('');
+                        setEmail('');
+                        setPhone('');
+                        setPassword('');
+                      }}
+                      disabled={createUser.isPending}
+                    >
                       Cancel
                     </Button>
-                    <Button onClick={() => setIsAddDialogOpen(false)}>
-                      Add Parent
+                    <Button onClick={handleAddParent} disabled={createUser.isPending}>
+                      {createUser.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Adding...
+                        </>
+                      ) : (
+                        'Add Parent'
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -137,23 +420,25 @@ const ParentManagementPage = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Parents</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{parents.length}</div>
+            <div className="text-2xl font-bold">{parentsWithChildren.length}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Active</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Active</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-success">{parents.length}</div>
+            <div className="text-2xl font-bold text-green-600">{activeParents}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pending Invitations</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">With Children</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-warning">3</div>
+            <div className="text-2xl font-bold text-blue-600">
+              {parentsWithChildren.length - unlinkedParents}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -161,7 +446,7 @@ const ParentManagementPage = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">Unlinked</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-muted-foreground">0</div>
+            <div className="text-2xl font-bold text-muted-foreground">{unlinkedParents}</div>
           </CardContent>
         </Card>
       </div>
@@ -196,18 +481,22 @@ const ParentManagementPage = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredParents.map((parent) => {
-                const children = getChildrenForParent(parent.id);
-                return (
+              {filteredParents.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    {searchQuery ? 'No parents found matching your search' : 'No parents yet. Add your first parent to get started.'}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredParents.map((parent) => (
                   <TableRow key={parent.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar>
-                          <AvatarImage src={parent.avatar} />
-                          <AvatarFallback>{getInitials(parent.name)}</AvatarFallback>
+                          <AvatarFallback>{getInitials(parent.full_name)}</AvatarFallback>
                         </Avatar>
                         <div>
-                          <div className="font-medium">{parent.name}</div>
+                          <div className="font-medium">{parent.full_name}</div>
                           <div className="text-sm text-muted-foreground">{parent.email}</div>
                         </div>
                       </div>
@@ -218,28 +507,32 @@ const ParentManagementPage = () => {
                           <Mail className="w-3 h-3" />
                           {parent.email}
                         </div>
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <Phone className="w-3 h-3" />
-                          +1 (555) 123-4567
-                        </div>
+                        {parent.phone && (
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <Phone className="w-3 h-3" />
+                            {parent.phone}
+                          </div>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Users className="w-4 h-4 text-muted-foreground" />
-                        <span>{children.length} {children.length === 1 ? 'child' : 'children'}</span>
+                        <span>{parent.children.length} {parent.children.length === 1 ? 'child' : 'children'}</span>
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        {children.map(c => c.name).join(', ')}
-                      </div>
+                      {parent.children.length > 0 && (
+                        <div className="text-sm text-muted-foreground mt-1">
+                          {parent.children.map(c => `${c.first_name} ${c.last_name}`).join(', ')}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="default">
-                        Active
+                      <Badge variant={parent.is_active ? "default" : "secondary"}>
+                        {parent.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      2 hours ago
+                      {formatLastLogin(parent.last_login)}
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -248,43 +541,39 @@ const ParentManagementPage = () => {
                             <MoreHorizontal className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-popover">
-                          <DropdownMenuItem>
-                            <Eye className="w-4 h-4 mr-2" />
-                            View Profile
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Edit className="w-4 h-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
+                        <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => {
                             setSelectedParent(parent.id);
                             setIsLinkChildDialogOpen(true);
                           }}>
-                            <Link className="w-4 h-4 mr-2" />
+                            <LinkIcon className="w-4 h-4 mr-2" />
                             Link Child
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Mail className="w-4 h-4 mr-2" />
-                            Send Message
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
+                          <DropdownMenuItem 
+                            className="text-destructive" 
+                            onClick={() => handleDeleteParent(parent.id)}
+                          >
                             <Trash2 className="w-4 h-4 mr-2" />
-                            Delete
+                            Deactivate
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                );
-              })}
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
       {/* Link Child Dialog */}
-      <Dialog open={isLinkChildDialogOpen} onOpenChange={setIsLinkChildDialogOpen}>
+      <Dialog open={isLinkChildDialogOpen} onOpenChange={(open) => {
+        setIsLinkChildDialogOpen(open);
+        if (!open) {
+          setSelectedChildForLink(null);
+        }
+      }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Link Child to Parent</DialogTitle>
@@ -292,32 +581,62 @@ const ParentManagementPage = () => {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Select Child</Label>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {mockChildren.map((child) => (
-                  <div 
-                    key={child.id}
-                    className="flex items-center gap-3 p-3 border rounded-lg hover:bg-accent cursor-pointer"
-                  >
-                    <Avatar>
-                      <AvatarImage src={child.avatar} />
-                      <AvatarFallback>{getInitials(child.name)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-medium">{child.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {child.classroomId ? 'Sunflower Room' : 'Unassigned'}
+              {allChildren.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No children available to link
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {allChildren.map((child) => {
+                    const parent = parentsWithChildren.find(p => p.id === selectedParent);
+                    const isAlreadyLinked = parent?.children.some(c => c.id === child.id);
+                    
+                    return (
+                      <div 
+                        key={child.id}
+                        className={`flex items-center gap-3 p-3 border rounded-lg ${
+                          isAlreadyLinked 
+                            ? 'opacity-50 cursor-not-allowed' 
+                            : 'hover:bg-accent cursor-pointer'
+                        } ${
+                          selectedChildForLink === child.id ? 'bg-accent border-primary' : ''
+                        }`}
+                        onClick={() => !isAlreadyLinked && setSelectedChildForLink(child.id)}
+                      >
+                        <Avatar>
+                          <AvatarFallback>{getInitials(`${child.first_name} ${child.last_name}`)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <div className="font-medium">{child.first_name} {child.last_name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {isAlreadyLinked ? 'Already linked' : child.classroom_id ? 'Assigned to classroom' : 'Unassigned'}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-2 pt-4">
-              <Button variant="outline" onClick={() => setIsLinkChildDialogOpen(false)}>
+              <Button variant="outline" onClick={() => {
+                setIsLinkChildDialogOpen(false);
+                setSelectedChildForLink(null);
+              }}>
                 Cancel
               </Button>
-              <Button onClick={() => setIsLinkChildDialogOpen(false)}>
-                Link Child
+              <Button 
+                onClick={handleLinkChild} 
+                disabled={!selectedChildForLink || createChildParent.isPending}
+              >
+                {createChildParent.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Linking...
+                  </>
+                ) : (
+                  'Link Child'
+                )}
               </Button>
             </div>
           </div>

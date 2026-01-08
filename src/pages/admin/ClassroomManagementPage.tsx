@@ -50,7 +50,7 @@ const ClassroomManagementPage = () => {
   });
 
   const { data: classrooms = [], isLoading } = useClassrooms();
-  const { data: teachers = [] } = useTeachers();
+  const { data: teachers = [], isLoading: isLoadingTeachers } = useTeachers();
   const { data: children = [] } = useChildren();
   
   const createClassroom = useCreateClassroom();
@@ -79,26 +79,29 @@ const ClassroomManagementPage = () => {
       name: classroom.name,
       age_group: classroom.age_group || "",
       capacity: classroom.capacity || 20,
-      teacher_id: classroom.teacher_id || "",
+      teacher_id: classroom.teacher_id || "unassigned",
     });
     setIsDialogOpen(true);
   };
 
   const handleCreate = () => {
     setSelectedClassroom(null);
-    setFormData({ name: "", age_group: "", capacity: 20, teacher_id: "" });
+    setFormData({ name: "", age_group: "", capacity: 20, teacher_id: "unassigned" });
     setIsDialogOpen(true);
   };
 
   const handleSubmit = async () => {
     try {
+      // Convert "unassigned" back to null for database
+      const teacherId = formData.teacher_id === "unassigned" ? null : formData.teacher_id;
+      
       if (selectedClassroom) {
         await updateClassroom.mutateAsync({
           id: selectedClassroom.id,
           name: formData.name,
           age_group: formData.age_group || null,
           capacity: formData.capacity,
-          teacher_id: formData.teacher_id || null,
+          teacher_id: teacherId,
         });
         toast.success("Classroom updated successfully");
       } else {
@@ -106,7 +109,7 @@ const ClassroomManagementPage = () => {
           name: formData.name,
           age_group: formData.age_group || null,
           capacity: formData.capacity,
-          teacher_id: formData.teacher_id || null,
+          teacher_id: teacherId,
         });
         toast.success("Classroom created successfully");
       }
@@ -166,7 +169,7 @@ const ClassroomManagementPage = () => {
                 <DialogDescription>
                   {selectedClassroom
                     ? "Update classroom details"
-                    : "Create a new classroom for Compo"}
+                    : "Create a new classroom for your daycare"}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -208,23 +211,31 @@ const ClassroomManagementPage = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="teacher">Assign Teacher</Label>
-                  <Select 
-                    value={formData.teacher_id} 
-                    onValueChange={(value) => setFormData({ ...formData, teacher_id: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select teacher" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Unassigned</SelectItem>
-                      {teachers.map((teacher) => (
-                        <SelectItem key={teacher.id} value={teacher.id}>
-                          {teacher.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="teacher">Assign Teacher (Optional)</Label>
+                  {isLoadingTeachers ? (
+                    <Skeleton className="h-10 w-full" />
+                  ) : teachers.length === 0 ? (
+                    <div className="border rounded-md p-2 text-sm text-muted-foreground bg-muted/50">
+                      No teachers available. You can assign a teacher later.
+                    </div>
+                  ) : (
+                    <Select 
+                      value={formData.teacher_id} 
+                      onValueChange={(value) => setFormData({ ...formData, teacher_id: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select teacher (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {teachers.map((teacher) => (
+                          <SelectItem key={teacher.id} value={teacher.id}>
+                            {teacher.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
               <DialogFooter>

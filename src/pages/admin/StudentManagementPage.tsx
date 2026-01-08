@@ -32,7 +32,8 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Edit, UserX, Eye } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Plus, Search, Edit, UserX, Eye, AlertCircle } from "lucide-react";
 import { useChildren, useCreateChild, useUpdateChild, useDeleteChild, Child } from "@/hooks/useChildren";
 import { useClassrooms } from "@/hooks/useClassrooms";
 import { useParents } from "@/hooks/useUsers";
@@ -51,16 +52,16 @@ const StudentManagementPage = () => {
     first_name: "",
     last_name: "",
     date_of_birth: "",
-    classroom_id: "",
-    parent_id: "",
+    classroom_id: "unassigned",
+    parent_id: "none",
     allergies: "",
     medical_notes: "",
     emergency_contact: "",
   });
 
   const { data: children = [], isLoading } = useChildren();
-  const { data: classrooms = [] } = useClassrooms();
-  const { data: parents = [] } = useParents();
+  const { data: classrooms = [], isLoading: isLoadingClassrooms } = useClassrooms();
+  const { data: parents = [], isLoading: isLoadingParents } = useParents();
   
   const createChild = useCreateChild();
   const updateChild = useUpdateChild();
@@ -86,8 +87,8 @@ const StudentManagementPage = () => {
       first_name: student.first_name,
       last_name: student.last_name,
       date_of_birth: student.date_of_birth,
-      classroom_id: student.classroom_id || "",
-      parent_id: "",
+      classroom_id: student.classroom_id || "unassigned",
+      parent_id: "none",
       allergies: student.allergies || "",
       medical_notes: student.medical_notes || "",
       emergency_contact: student.emergency_contact || "",
@@ -101,8 +102,8 @@ const StudentManagementPage = () => {
       first_name: "",
       last_name: "",
       date_of_birth: "",
-      classroom_id: "",
-      parent_id: "",
+      classroom_id: "unassigned",
+      parent_id: "none",
       allergies: "",
       medical_notes: "",
       emergency_contact: "",
@@ -112,13 +113,17 @@ const StudentManagementPage = () => {
 
   const handleSubmit = async () => {
     try {
+      // Convert placeholder values back to null for database
+      const classroomId = formData.classroom_id === "unassigned" ? null : formData.classroom_id;
+      const parentId = formData.parent_id === "none" ? null : formData.parent_id;
+
       if (selectedStudent) {
         await updateChild.mutateAsync({
           id: selectedStudent.id,
           first_name: formData.first_name,
           last_name: formData.last_name,
           date_of_birth: formData.date_of_birth,
-          classroom_id: formData.classroom_id || null,
+          classroom_id: classroomId,
           allergies: formData.allergies || null,
           medical_notes: formData.medical_notes || null,
           emergency_contact: formData.emergency_contact || null,
@@ -129,17 +134,17 @@ const StudentManagementPage = () => {
           first_name: formData.first_name,
           last_name: formData.last_name,
           date_of_birth: formData.date_of_birth,
-          classroom_id: formData.classroom_id || null,
+          classroom_id: classroomId,
           allergies: formData.allergies || null,
           medical_notes: formData.medical_notes || null,
           emergency_contact: formData.emergency_contact || null,
         });
         
         // Link parent if selected
-        if (formData.parent_id && newChild) {
+        if (parentId && newChild) {
           await createChildParent.mutateAsync({
             child_id: newChild.id,
-            parent_id: formData.parent_id,
+            parent_id: parentId,
             is_primary: true,
             relationship: 'parent',
           });
@@ -176,6 +181,10 @@ const StudentManagementPage = () => {
     return today.getFullYear() - birthDate.getFullYear();
   };
 
+  // Check if we have the required data to create a student
+  const hasNoClassrooms = !isLoadingClassrooms && classrooms.length === 0;
+  const hasNoParents = !isLoadingParents && parents.length === 0;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -183,6 +192,25 @@ const StudentManagementPage = () => {
           title="Student Management"
           description="Manage student records, enrollments, and parent associations"
         />
+
+        {/* Warning Alerts */}
+        {hasNoClassrooms && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              No classrooms available. Please <Link to="/admin/classrooms" className="underline font-medium">create a classroom</Link> before adding students.
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {hasNoParents && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              No parent accounts found. Consider <Link to="/admin/parents" className="underline font-medium">adding parent accounts</Link> to link with students.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="flex flex-col lg:flex-row gap-4 justify-between">
           <div className="flex flex-col sm:flex-row gap-4 flex-1">
@@ -224,7 +252,7 @@ const StudentManagementPage = () => {
                 <DialogDescription>
                   {selectedStudent
                     ? "Update student information"
-                    : "Enroll a new student in Compo"}
+                    : "Enroll a new student in the daycare"}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
@@ -260,43 +288,59 @@ const StudentManagementPage = () => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="classroom">Classroom</Label>
-                    <Select 
-                      value={formData.classroom_id} 
-                      onValueChange={(value) => setFormData({ ...formData, classroom_id: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select classroom" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Unassigned</SelectItem>
-                        {classrooms.map((classroom) => (
-                          <SelectItem key={classroom.id} value={classroom.id}>
-                            {classroom.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {isLoadingClassrooms ? (
+                      <Skeleton className="h-10 w-full" />
+                    ) : classrooms.length === 0 ? (
+                      <div className="border rounded-md p-2 text-sm text-muted-foreground bg-muted/50">
+                        No classrooms available
+                      </div>
+                    ) : (
+                      <Select 
+                        value={formData.classroom_id} 
+                        onValueChange={(value) => setFormData({ ...formData, classroom_id: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select classroom" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          {classrooms.map((classroom) => (
+                            <SelectItem key={classroom.id} value={classroom.id}>
+                              {classroom.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 </div>
                 {!selectedStudent && (
                   <div className="space-y-2">
-                    <Label htmlFor="parent">Parent/Guardian</Label>
-                    <Select 
-                      value={formData.parent_id} 
-                      onValueChange={(value) => setFormData({ ...formData, parent_id: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select parent" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">No parent linked</SelectItem>
-                        {parents.map((parent) => (
-                          <SelectItem key={parent.id} value={parent.id}>
-                            {parent.full_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="parent">Parent/Guardian (Optional)</Label>
+                    {isLoadingParents ? (
+                      <Skeleton className="h-10 w-full" />
+                    ) : parents.length === 0 ? (
+                      <div className="border rounded-md p-2 text-sm text-muted-foreground bg-muted/50">
+                        No parent accounts available. You can link a parent later.
+                      </div>
+                    ) : (
+                      <Select 
+                        value={formData.parent_id} 
+                        onValueChange={(value) => setFormData({ ...formData, parent_id: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select parent (optional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No parent linked</SelectItem>
+                          {parents.map((parent) => (
+                            <SelectItem key={parent.id} value={parent.id}>
+                              {parent.full_name} ({parent.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 )}
                 <div className="space-y-2">
@@ -404,7 +448,7 @@ const StudentManagementPage = () => {
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="sm" asChild>
-                          <Link to={`/teacher/student/${student.id}`}>
+                          <Link to={`/admin/students/${student.id}`}>
                             <Eye className="h-4 w-4" />
                           </Link>
                         </Button>

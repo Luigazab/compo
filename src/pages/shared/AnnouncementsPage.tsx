@@ -38,11 +38,11 @@ const AnnouncementsPage: React.FC = () => {
     priority: 'normal',
     is_pinned: false,
     event_date: '',
-    classroom_id: '',
+    classroom_id: 'all',
   });
 
   const { data: announcements = [], isLoading } = useAnnouncements();
-  const { data: classrooms = [] } = useClassrooms();
+  const { data: classrooms = [], isLoading: isLoadingClassrooms } = useClassrooms();
   const { data: users = [] } = useUsers();
   const createAnnouncement = useCreateAnnouncement();
   const updateAnnouncement = useUpdateAnnouncement();
@@ -54,13 +54,15 @@ const AnnouncementsPage: React.FC = () => {
     if (!user?.id) return;
     
     try {
+      const classroomId = formData.classroom_id === 'all' ? null : formData.classroom_id;
+      
       await createAnnouncement.mutateAsync({
         title: formData.title,
         content: formData.content,
         priority: formData.priority,
         is_pinned: formData.is_pinned,
         event_date: formData.event_date || null,
-        classroom_id: formData.classroom_id || null,
+        classroom_id: classroomId,
         created_by: user.id,
       });
       toast.success('Announcement created successfully');
@@ -75,6 +77,8 @@ const AnnouncementsPage: React.FC = () => {
     if (!selectedAnnouncement) return;
     
     try {
+      const classroomId = formData.classroom_id === 'all' ? null : formData.classroom_id;
+      
       await updateAnnouncement.mutateAsync({
         id: selectedAnnouncement.id,
         title: formData.title,
@@ -82,7 +86,7 @@ const AnnouncementsPage: React.FC = () => {
         priority: formData.priority,
         is_pinned: formData.is_pinned,
         event_date: formData.event_date || null,
-        classroom_id: formData.classroom_id || null,
+        classroom_id: classroomId,
       });
       toast.success('Announcement updated successfully');
       setIsEditDialogOpen(false);
@@ -109,7 +113,7 @@ const AnnouncementsPage: React.FC = () => {
       priority: announcement.priority || 'normal',
       is_pinned: announcement.is_pinned || false,
       event_date: announcement.event_date || '',
-      classroom_id: announcement.classroom_id || '',
+      classroom_id: announcement.classroom_id || 'all',
     });
     setIsEditDialogOpen(true);
   };
@@ -121,7 +125,7 @@ const AnnouncementsPage: React.FC = () => {
       priority: 'normal',
       is_pinned: false,
       event_date: '',
-      classroom_id: '',
+      classroom_id: 'all',
     });
     setSelectedAnnouncement(null);
   };
@@ -141,95 +145,6 @@ const AnnouncementsPage: React.FC = () => {
     return author?.full_name || 'Unknown';
   };
 
-  const AnnouncementForm = ({ onSubmit, isEdit = false }: { onSubmit: () => void; isEdit?: boolean }) => (
-    <div className="space-y-4">
-      <div>
-        <Label>Title</Label>
-        <Input
-          placeholder="Announcement title"
-          value={formData.title}
-          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-        />
-      </div>
-      <div>
-        <Label>Content</Label>
-        <Textarea
-          placeholder="Announcement content..."
-          value={formData.content}
-          onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-          rows={4}
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label>Priority</Label>
-          <Select
-            value={formData.priority}
-            onValueChange={(value) => setFormData({ ...formData, priority: value })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select priority" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="low">Low</SelectItem>
-              <SelectItem value="normal">Normal</SelectItem>
-              <SelectItem value="high">High</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label>Classroom (Optional)</Label>
-          <Select
-            value={formData.classroom_id}
-            onValueChange={(value) => setFormData({ ...formData, classroom_id: value })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="All classrooms" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">All classrooms</SelectItem>
-              {classrooms.map((classroom) => (
-                <SelectItem key={classroom.id} value={classroom.id}>
-                  {classroom.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div>
-        <Label>Event Date (Optional)</Label>
-        <Input
-          type="date"
-          value={formData.event_date}
-          onChange={(e) => setFormData({ ...formData, event_date: e.target.value })}
-        />
-      </div>
-      <div className="flex items-center gap-2">
-        <Switch
-          checked={formData.is_pinned}
-          onCheckedChange={(checked) => setFormData({ ...formData, is_pinned: checked })}
-        />
-        <Label>Pin this announcement</Label>
-      </div>
-      <DialogFooter>
-        <Button
-          variant="outline"
-          onClick={() => isEdit ? setIsEditDialogOpen(false) : setIsCreateDialogOpen(false)}
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={onSubmit}
-          disabled={!formData.title || !formData.content || createAnnouncement.isPending || updateAnnouncement.isPending}
-        >
-          {(createAnnouncement.isPending || updateAnnouncement.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          {isEdit ? 'Update' : 'Create'}
-        </Button>
-      </DialogFooter>
-    </div>
-  );
-
   return (
     <DashboardLayout>
       <PageHeader
@@ -248,7 +163,101 @@ const AnnouncementsPage: React.FC = () => {
                 <DialogHeader>
                   <DialogTitle>Create Announcement</DialogTitle>
                 </DialogHeader>
-                <AnnouncementForm onSubmit={handleCreate} />
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="create-title">Title</Label>
+                    <Input
+                      id="create-title"
+                      placeholder="Announcement title"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="create-content">Content</Label>
+                    <Textarea
+                      id="create-content"
+                      placeholder="Announcement content..."
+                      value={formData.content}
+                      onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                      rows={4}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="create-priority">Priority</Label>
+                      <Select
+                        value={formData.priority}
+                        onValueChange={(value) => setFormData({ ...formData, priority: value })}
+                      >
+                        <SelectTrigger id="create-priority">
+                          <SelectValue placeholder="Select priority" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="normal">Normal</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="create-classroom">Classroom (Optional)</Label>
+                      {isLoadingClassrooms ? (
+                        <Skeleton className="h-10 w-full" />
+                      ) : classrooms.length === 0 ? (
+                        <div className="border rounded-md p-2 text-sm text-muted-foreground bg-muted/50">
+                          No classrooms available
+                        </div>
+                      ) : (
+                        <Select
+                          value={formData.classroom_id}
+                          onValueChange={(value) => setFormData({ ...formData, classroom_id: value })}
+                        >
+                          <SelectTrigger id="create-classroom">
+                            <SelectValue placeholder="All classrooms" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All classrooms</SelectItem>
+                            {classrooms.map((classroom) => (
+                              <SelectItem key={classroom.id} value={classroom.id}>
+                                {classroom.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="create-event-date">Event Date (Optional)</Label>
+                    <Input
+                      id="create-event-date"
+                      type="date"
+                      value={formData.event_date}
+                      onChange={(e) => setFormData({ ...formData, event_date: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="create-pinned"
+                      checked={formData.is_pinned}
+                      onCheckedChange={(checked) => setFormData({ ...formData, is_pinned: checked })}
+                    />
+                    <Label htmlFor="create-pinned">Pin this announcement</Label>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleCreate}
+                    disabled={!formData.title || !formData.content || createAnnouncement.isPending}
+                  >
+                    {createAnnouncement.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Create
+                  </Button>
+                </DialogFooter>
               </DialogContent>
             </Dialog>
           )
@@ -331,7 +340,101 @@ const AnnouncementsPage: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Edit Announcement</DialogTitle>
           </DialogHeader>
-          <AnnouncementForm onSubmit={handleEdit} isEdit />
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-title">Title</Label>
+              <Input
+                id="edit-title"
+                placeholder="Announcement title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-content">Content</Label>
+              <Textarea
+                id="edit-content"
+                placeholder="Announcement content..."
+                value={formData.content}
+                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                rows={4}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-priority">Priority</Label>
+                <Select
+                  value={formData.priority}
+                  onValueChange={(value) => setFormData({ ...formData, priority: value })}
+                >
+                  <SelectTrigger id="edit-priority">
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit-classroom">Classroom (Optional)</Label>
+                {isLoadingClassrooms ? (
+                  <Skeleton className="h-10 w-full" />
+                ) : classrooms.length === 0 ? (
+                  <div className="border rounded-md p-2 text-sm text-muted-foreground bg-muted/50">
+                    No classrooms available
+                  </div>
+                ) : (
+                  <Select
+                    value={formData.classroom_id}
+                    onValueChange={(value) => setFormData({ ...formData, classroom_id: value })}
+                  >
+                    <SelectTrigger id="edit-classroom">
+                      <SelectValue placeholder="All classrooms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All classrooms</SelectItem>
+                      {classrooms.map((classroom) => (
+                        <SelectItem key={classroom.id} value={classroom.id}>
+                          {classroom.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="edit-event-date">Event Date (Optional)</Label>
+              <Input
+                id="edit-event-date"
+                type="date"
+                value={formData.event_date}
+                onChange={(e) => setFormData({ ...formData, event_date: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="edit-pinned"
+                checked={formData.is_pinned}
+                onCheckedChange={(checked) => setFormData({ ...formData, is_pinned: checked })}
+              />
+              <Label htmlFor="edit-pinned">Pin this announcement</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEdit}
+              disabled={!formData.title || !formData.content || updateAnnouncement.isPending}
+            >
+              {updateAnnouncement.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Update
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
