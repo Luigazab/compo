@@ -23,6 +23,27 @@ export function useChildren(classroomId?: string) {
   });
 }
 
+// Fetch children for multiple classrooms (for multi-classroom teachers)
+export function useChildrenByClassrooms(classroomIds: string[]) {
+  return useQuery({
+    queryKey: ['children-by-classrooms', classroomIds],
+    queryFn: async () => {
+      if (classroomIds.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('children')
+        .select('*')
+        .eq('is_active', true)
+        .in('classroom_id', classroomIds)
+        .order('first_name');
+      
+      if (error) throw error;
+      return data as Child[];
+    },
+    enabled: classroomIds.length > 0,
+  });
+}
+
 export function useChild(childId: string | undefined) {
   return useQuery({
     queryKey: ['child', childId],
