@@ -40,20 +40,82 @@ export function useClassroom(classroomId: string | undefined) {
   });
 }
 
+// Get all classrooms assigned to a teacher (supports multi-classroom)
+export function useTeacherClassrooms(teacherId: string | undefined) {
+  return useQuery({
+    queryKey: ['teacher-classrooms', teacherId],
+    queryFn: async () => {
+      if (!teacherId) return [];
+      
+      // Check both the legacy teacher_id field and the junction table
+      const { data: legacyData, error: legacyError } = await supabase
+        .from('classrooms')
+        .select('*')
+        .eq('teacher_id', teacherId);
+      
+      if (legacyError) throw legacyError;
+      
+      const { data: junctionData, error: junctionError } = await supabase
+        .from('teacher_classrooms')
+        .select('classrooms (*)')
+        .eq('teacher_id', teacherId);
+      
+      if (junctionError) throw junctionError;
+      
+      // Combine and deduplicate results
+      const junctionClassrooms = junctionData
+        ?.map(tc => tc.classrooms)
+        .filter((c): c is Classroom => c !== null) || [];
+      
+      const allClassrooms = [...(legacyData || []), ...junctionClassrooms];
+      const uniqueClassrooms = allClassrooms.filter((classroom, index, self) =>
+        index === self.findIndex(c => c.id === classroom.id)
+      );
+      
+      return uniqueClassrooms;
+    },
+    enabled: !!teacherId,
+  });
+}
+
+// Legacy function for backwards compatibility - returns first classroom
 export function useTeacherClassroom(teacherId: string | undefined) {
   return useQuery({
     queryKey: ['teacher-classroom', teacherId],
     queryFn: async () => {
       if (!teacherId) return null;
       
-      const { data, error } = await supabase
+      // Check legacy field first
+      const { data: legacyData, error: legacyError } = await supabase
         .from('classrooms')
         .select('*')
         .eq('teacher_id', teacherId)
         .maybeSingle();
       
-      if (error) throw error;
-      return data as Classroom | null;
+      if (legacyError && legacyError.code !== 'PGRST116') throw legacyError;
+      if (legacyData) return legacyData as Classroom;
+      
+      // Check junction table
+      const { data: junctionData, error: junctionError } = await supabase
+        .from('teacher_classrooms')
+        .select('classrooms (*)')
+        .eq('teacher_id', teacherId)
+        .eq('is_primary', true)
+        .maybeSingle();
+      
+      if (junctionError && junctionError.code !== 'PGRST116') throw junctionError;
+      if (junctionData?.classrooms) return junctionData.classrooms as Classroom;
+      
+      // Fallback to any assigned classroom
+      const { data: anyData, error: anyError } = await supabase
+        .from('teacher_classrooms')
+        .select('classrooms (*)')
+        .eq('teacher_id', teacherId)
+        .limit(1)
+        .maybeSingle();
+      
+      if (anyError && anyError.code !== 'PGRST116') throw anyError;
+      return anyData?.classrooms as Classroom | null;
     },
     enabled: !!teacherId,
   });
