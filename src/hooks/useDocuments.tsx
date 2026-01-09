@@ -92,7 +92,7 @@ export function useUploadDocument() {
   
   return useMutation({
     mutationFn: async ({ documentId, file, childId }: { documentId: string; file: File; childId: string }) => {
-      // Upload to storage
+      // Upload to storage - using a simple path structure
       const fileExt = file.name.split('.').pop();
       const fileName = `${childId}/${documentId}/${Date.now()}.${fileExt}`;
       
@@ -107,7 +107,7 @@ export function useUploadDocument() {
         .from('documents')
         .createSignedUrl(fileName, 3600 * 24 * 365); // 1 year
       
-      // Update document record
+      // Update document record - use explicit table reference to avoid ambiguity
       const { data, error } = await supabase
         .from('required_documents')
         .update({
@@ -116,7 +116,7 @@ export function useUploadDocument() {
           submission_date: new Date().toISOString().split('T')[0],
         })
         .eq('id', documentId)
-        .select()
+        .select('id, child_id, document_type, due_date, file_url, status, submission_date, created_at')
         .single();
       
       if (error) throw error;

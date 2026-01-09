@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { useChildren } from '@/hooks/useChildren';
 import { useWellbeingReports, useCreateWellbeingReport } from '@/hooks/useWellbeingReports';
+import { useAddWellbeingMedia } from '@/hooks/useWellbeingMedia';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus,
@@ -32,6 +33,7 @@ import {
 import { cn, getFullName } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { PhotoUpload } from '@/components/ui/photo-upload';
 
 const incidentTypes = [
   { value: 'injury', label: 'Injury', icon: AlertTriangle, color: 'text-destructive' },
@@ -52,6 +54,7 @@ const WellbeingReportsPage: React.FC = () => {
   const { data: children = [], isLoading: childrenLoading } = useChildren();
   const { data: reports = [], isLoading: reportsLoading } = useWellbeingReports();
   const createWellbeingReport = useCreateWellbeingReport();
+  const addWellbeingMedia = useAddWellbeingMedia();
   
   const [showForm, setShowForm] = useState(false);
   const [selectedChild, setSelectedChild] = useState('');
@@ -59,6 +62,7 @@ const WellbeingReportsPage: React.FC = () => {
   const [severity, setSeverity] = useState('low');
   const [notifyParent, setNotifyParent] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [photos, setPhotos] = useState<File[]>([]);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     description: '',
@@ -70,7 +74,8 @@ const WellbeingReportsPage: React.FC = () => {
     
     setIsSubmitting(true);
     try {
-      await createWellbeingReport.mutateAsync({
+      // Create report first
+      const report = await createWellbeingReport.mutateAsync({
         child_id: selectedChild,
         created_by: user.id,
         report_date: formData.date,
@@ -81,6 +86,16 @@ const WellbeingReportsPage: React.FC = () => {
         parent_notified: notifyParent,
       });
       
+      // Upload photos if any
+      if (photos.length > 0) {
+        for (const photo of photos) {
+          await addWellbeingMedia.mutateAsync({
+            wellbeingReportId: report.id,
+            file: photo,
+          });
+        }
+      }
+      
       toast({
         title: 'Report submitted!',
         description: notifyParent
@@ -90,6 +105,7 @@ const WellbeingReportsPage: React.FC = () => {
       
       setShowForm(false);
       setSelectedChild('');
+      setPhotos([]);
       setFormData({
         date: new Date().toISOString().split('T')[0],
         description: '',
@@ -237,15 +253,11 @@ const WellbeingReportsPage: React.FC = () => {
                 {/* Photo Upload */}
                 <div className="space-y-2">
                   <Label>Photos (Optional)</Label>
-                  <div className="border-2 border-dashed border-border rounded-xl p-6 text-center">
-                    <Camera className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      Upload photos if applicable
-                    </p>
-                    <Button variant="secondary" size="sm" className="mt-3">
-                      Choose Files
-                    </Button>
-                  </div>
+                  <PhotoUpload
+                    maxFiles={5}
+                    maxSizeMB={10}
+                    onPhotosChange={setPhotos}
+                  />
                 </div>
 
                 {/* Notify Parent */}

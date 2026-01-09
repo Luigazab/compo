@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useDocuments, useCreateDocument, useUpdateDocument, useUploadDocument } from "@/hooks/useDocuments";
 import { useChildren } from "@/hooks/useChildren";
 import { useChildParents } from "@/hooks/useChildParent";
-import { useClassrooms } from "@/hooks/useClassrooms";
+import { useTeacherClassrooms } from "@/hooks/useClassrooms";
 import {
   FileText,
   Upload,
@@ -84,17 +84,18 @@ const DocumentsPage = () => {
   const { data: documents = [], isLoading } = useDocuments();
   const { data: children = [] } = useChildren();
   const { data: childParentLinks = [] } = useChildParents();
-  const { data: classrooms = [] } = useClassrooms();
+  const { data: teacherClassrooms = [] } = useTeacherClassrooms(isTeacher ? user?.id : undefined);
   const createDocument = useCreateDocument();
   const updateDocument = useUpdateDocument();
   const uploadDocument = useUploadDocument();
 
-  // Get relevant children based on role
+  // Get relevant children based on role - supports multi-classroom teachers
   const getRelevantChildren = () => {
     if (isTeacher && user) {
-      const teacherClassroom = classrooms.find((c) => c.teacher_id === user.id);
-      if (teacherClassroom) {
-        return children.filter((c) => c.classroom_id === teacherClassroom.id);
+      // Get all classroom IDs the teacher is assigned to
+      const teacherClassroomIds = teacherClassrooms.map(c => c.id);
+      if (teacherClassroomIds.length > 0) {
+        return children.filter((c) => c.classroom_id && teacherClassroomIds.includes(c.classroom_id));
       }
       return children;
     } else if (isParent && user) {

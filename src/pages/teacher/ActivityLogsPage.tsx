@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { ActivityCard } from '@/components/ui/activity-card';
 import { useChildren } from '@/hooks/useChildren';
-import { useActivityLogs, useCreateActivityLog } from '@/hooks/useActivityLogs';
+import { useActivityLogs, useCreateActivityLog, useAddActivityMedia } from '@/hooks/useActivityLogs';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus,
@@ -50,11 +50,13 @@ const ActivityLogsPage: React.FC = () => {
   const { data: children = [], isLoading: childrenLoading } = useChildren();
   const { data: activityLogs = [], isLoading: logsLoading } = useActivityLogs();
   const createActivityLog = useCreateActivityLog();
+  const addActivityMedia = useAddActivityMedia();
   
   const [showForm, setShowForm] = useState(false);
   const [selectedChild, setSelectedChild] = useState('');
   const [selectedMood, setSelectedMood] = useState('happy');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [photos, setPhotos] = useState<File[]>([]);
   const [formData, setFormData] = useState({
     arrivalTime: '',
     pickupTime: '',
@@ -69,7 +71,8 @@ const ActivityLogsPage: React.FC = () => {
     
     setIsSubmitting(true);
     try {
-      await createActivityLog.mutateAsync({
+      // Create activity log first
+      const log = await createActivityLog.mutateAsync({
         child_id: selectedChild,
         created_by: user.id,
         arrival_time: formData.arrivalTime || null,
@@ -81,6 +84,16 @@ const ActivityLogsPage: React.FC = () => {
         mood: selectedMood,
       });
       
+      // Upload photos if any
+      if (photos.length > 0) {
+        for (const photo of photos) {
+          await addActivityMedia.mutateAsync({
+            activityLogId: log.id,
+            file: photo,
+          });
+        }
+      }
+      
       toast({
         title: isDraft ? 'Draft saved!' : 'Activity log published!',
         description: isDraft
@@ -90,6 +103,7 @@ const ActivityLogsPage: React.FC = () => {
       
       setShowForm(false);
       setSelectedChild('');
+      setPhotos([]);
       setFormData({
         arrivalTime: '',
         pickupTime: '',
@@ -319,7 +333,7 @@ const ActivityLogsPage: React.FC = () => {
                   <PhotoUpload
                     maxFiles={5}
                     maxSizeMB={10}
-                    onPhotosChange={(files) => console.log('Photos:', files)}
+                    onPhotosChange={setPhotos}
                   />
                 </div>
 
