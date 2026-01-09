@@ -577,6 +577,45 @@ export type Database = {
         }
         Relationships: []
       }
+      teacher_classrooms: {
+        Row: {
+          classroom_id: string
+          created_at: string | null
+          id: string
+          is_primary: boolean | null
+          teacher_id: string
+        }
+        Insert: {
+          classroom_id: string
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          teacher_id: string
+        }
+        Update: {
+          classroom_id?: string
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teacher_classrooms_classroom_id_fkey"
+            columns: ["classroom_id"]
+            isOneToOne: false
+            referencedRelation: "classrooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teacher_classrooms_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           created_at: string | null
@@ -609,6 +648,41 @@ export type Database = {
           role?: string
         }
         Relationships: []
+      }
+      wellbeing_media: {
+        Row: {
+          caption: string | null
+          created_at: string | null
+          id: string
+          media_type: string | null
+          media_url: string
+          wellbeing_report_id: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string | null
+          id?: string
+          media_type?: string | null
+          media_url: string
+          wellbeing_report_id: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string | null
+          id?: string
+          media_type?: string | null
+          media_url?: string
+          wellbeing_report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wellbeing_media_wellbeing_report_id_fkey"
+            columns: ["wellbeing_report_id"]
+            isOneToOne: false
+            referencedRelation: "wellbeing_reports"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       wellbeing_reports: {
         Row: {
