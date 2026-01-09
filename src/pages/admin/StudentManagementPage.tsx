@@ -54,6 +54,7 @@ const StudentManagementPage = () => {
     date_of_birth: "",
     classroom_id: "unassigned",
     parent_id: "none",
+    relationship: "guardian",
     allergies: "",
     medical_notes: "",
     emergency_contact: "",
@@ -89,6 +90,7 @@ const StudentManagementPage = () => {
       date_of_birth: student.date_of_birth,
       classroom_id: student.classroom_id || "unassigned",
       parent_id: "none",
+      relationship: "guardian",
       allergies: student.allergies || "",
       medical_notes: student.medical_notes || "",
       emergency_contact: student.emergency_contact || "",
@@ -104,6 +106,7 @@ const StudentManagementPage = () => {
       date_of_birth: "",
       classroom_id: "unassigned",
       parent_id: "none",
+      relationship: "guardian",
       allergies: "",
       medical_notes: "",
       emergency_contact: "",
@@ -146,7 +149,7 @@ const StudentManagementPage = () => {
             child_id: newChild.id,
             parent_id: parentId,
             is_primary: true,
-            relationship: 'parent',
+            relationship: formData.relationship as 'mother' | 'father' | 'guardian' | 'other',
           });
         }
         
@@ -315,33 +318,56 @@ const StudentManagementPage = () => {
                   </div>
                 </div>
                 {!selectedStudent && (
-                  <div className="space-y-2">
-                    <Label htmlFor="parent">Parent/Guardian (Optional)</Label>
-                    {isLoadingParents ? (
-                      <Skeleton className="h-10 w-full" />
-                    ) : parents.length === 0 ? (
-                      <div className="border rounded-md p-2 text-sm text-muted-foreground bg-muted/50">
-                        No parent accounts available. You can link a parent later.
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="parent">Parent/Guardian (Optional)</Label>
+                      {isLoadingParents ? (
+                        <Skeleton className="h-10 w-full" />
+                      ) : parents.length === 0 ? (
+                        <div className="border rounded-md p-2 text-sm text-muted-foreground bg-muted/50">
+                          No parent accounts available. You can link a parent later.
+                        </div>
+                      ) : (
+                        <Select 
+                          value={formData.parent_id} 
+                          onValueChange={(value) => setFormData({ ...formData, parent_id: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select parent (optional)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No parent linked</SelectItem>
+                            {parents.map((parent) => (
+                              <SelectItem key={parent.id} value={parent.id}>
+                                {parent.full_name} ({parent.email})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                    
+                    {/* Show relationship selector only when a parent is selected */}
+                    {formData.parent_id !== "none" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="relationship">Relationship</Label>
+                        <Select 
+                          value={formData.relationship} 
+                          onValueChange={(value) => setFormData({ ...formData, relationship: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select relationship" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="mother">Mother</SelectItem>
+                            <SelectItem value="father">Father</SelectItem>
+                            <SelectItem value="guardian">Guardian</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                    ) : (
-                      <Select 
-                        value={formData.parent_id} 
-                        onValueChange={(value) => setFormData({ ...formData, parent_id: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select parent (optional)" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No parent linked</SelectItem>
-                          {parents.map((parent) => (
-                            <SelectItem key={parent.id} value={parent.id}>
-                              {parent.full_name} ({parent.email})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
                     )}
-                  </div>
+                  </>
                 )}
                 <div className="space-y-2">
                   <Label htmlFor="allergies">Allergies</Label>
