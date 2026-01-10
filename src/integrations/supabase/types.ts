@@ -242,6 +242,8 @@ export type Database = {
           nap_duration: string | null
           pickup_time: string | null
           updated_at: string | null
+          activity_media_url: string | null
+          is_acknowledged: boolean | null
         }
         Insert: {
           activities?: string | null
@@ -257,6 +259,8 @@ export type Database = {
           nap_duration?: string | null
           pickup_time?: string | null
           updated_at?: string | null
+          activity_media_url?: string | null
+          is_acknowledged?: boolean | null
         }
         Update: {
           activities?: string | null
@@ -272,6 +276,8 @@ export type Database = {
           nap_duration?: string | null
           pickup_time?: string | null
           updated_at?: string | null
+          activity_media_url?: string | null
+          is_acknowledged?: boolean | null
         }
         Relationships: [
           {

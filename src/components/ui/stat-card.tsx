@@ -26,31 +26,31 @@ export const StatCard: React.FC<StatCardProps> = ({
 }) => {
   const variantStyles = {
     default: 'bg-card',
-    primary: 'bg-primary/5 border-primary/20',
-    accent: 'bg-accent/10 border-accent/20',
-    success: 'bg-success-light border-success/20',
-    warning: 'bg-warning-light border-warning/20',
+    primary: 'bg-primary/20 border-primary',
+    accent: 'bg-accent/20 border-accent',
+    success: 'bg-success-light border-success',
+    warning: 'bg-warning-light border-warning',
   };
 
   const iconStyles = {
-    default: 'bg-muted text-muted-foreground',
-    primary: 'bg-primary/10 text-primary',
-    accent: 'bg-accent/20 text-accent',
-    success: 'bg-success/10 text-success',
-    warning: 'bg-warning/10 text-warning',
+    default: 'bg-muted text',
+    primary: 'bg-white text-primary',
+    accent: 'bg-white text-accent',
+    success: 'bg-white text-success',
+    warning: 'bg-white text-warning',
   };
 
   return (
     <div
       className={cn(
-        'rounded-2xl border p-5 shadow-card card-hover',
+        'rounded-2xl border p-5 shadow-sm card-hover',
         variantStyles[variant],
         className
       )}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          <p className="text-sm font-bold text-muted-foreground">{title}</p>
           <p className="text-3xl font-bold mt-1">{value}</p>
           {subtitle && (
             <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>

@@ -105,3 +105,34 @@ export function useDeleteAnnouncement() {
     },
   });
 }
+
+export function useRecentAnnouncements(limit: number = 2) {
+  return useQuery({
+    queryKey: ['recent-announcements', limit],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('id, title, content, priority, created_at, is_pinned')
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useAnnouncementsCount() {
+  return useQuery({
+    queryKey: ['announcements-count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('announcements')
+        .select('*', { count: 'exact', head: true });
+      
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}

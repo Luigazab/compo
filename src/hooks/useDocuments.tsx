@@ -145,3 +145,31 @@ export function useDeleteDocument() {
     },
   });
 }
+
+export function useParentDocumentsSummary(childIds: string[]) {
+  return useQuery({
+    queryKey: ['parent-documents-summary', childIds],
+    queryFn: async () => {
+      if (childIds.length === 0) return { all: [], pending: [], expired: [] };
+      
+      const { data, error } = await supabase
+        .from('required_documents')
+        .select('id, child_id, document_type, status, due_date, submission_date')
+        .in('child_id', childIds)
+        .order('due_date', { ascending: true });
+      
+      if (error) throw error;
+      
+      const pending = data.filter(d => d.status === 'pending');
+      const expired = data.filter(d => d.status === 'expired');
+      
+      return {
+        all: data,
+        pending,
+        expired,
+        pendingAndExpired: [...pending, ...expired]
+      };
+    },
+    enabled: childIds.length > 0,
+  });
+}

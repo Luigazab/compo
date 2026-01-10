@@ -87,3 +87,43 @@ export function useUpdateWellbeingReport() {
     },
   });
 }
+
+export function useRecentWellbeingReports(childIds: string[], limit: number = 5) {
+  return useQuery({
+    queryKey: ['recent-wellbeing-reports', childIds, limit],
+    queryFn: async () => {
+      if (childIds.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('wellbeing_reports')
+        .select('id, child_id, report_date, incident_type, description, severity, parent_notified, created_at')
+        .in('child_id', childIds)
+        .order('report_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      
+      if (error) throw error;
+      return data as WellbeingReport[];
+    },
+    enabled: childIds.length > 0,
+  });
+}
+
+export function useUnreadWellbeingReportsCount(childIds: string[]) {
+  return useQuery({
+    queryKey: ['unread-wellbeing-reports-count', childIds],
+    queryFn: async () => {
+      if (childIds.length === 0) return 0;
+      
+      const { count, error } = await supabase
+        .from('wellbeing_reports')
+        .select('*', { count: 'exact', head: true })
+        .in('child_id', childIds)
+        .eq('parent_notified', false);
+      
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: childIds.length > 0,
+  });
+}

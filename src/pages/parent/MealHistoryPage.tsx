@@ -92,6 +92,7 @@ const MealHistoryPage: React.FC = () => {
 
   return (
     <DashboardLayout>
+      <div className='p-4 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
       <PageHeader
         title="Meal History"
         description="View your children's meal logs and nutrition trends"
@@ -150,6 +151,7 @@ const MealHistoryPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+      </div>
 
       {/* Stats */}
       <Card className="shadow-card mb-6">
@@ -199,7 +201,7 @@ const MealHistoryPage: React.FC = () => {
                 onSelect={setSelectedDate}
                 month={currentMonth}
                 onMonthChange={setCurrentMonth}
-                className="rounded-md border pointer-events-auto w-full max-w-[350px]"
+                className="rounded-md border pointer-events-auto w-full max-w-[350px] flex justify-center"
                 modifiers={{
                   hasMeals: daysWithMeals
                 }}

@@ -5,19 +5,16 @@ import { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/type
 export type ActivityLog = Tables<'daily_activity_logs'>;
 export type ActivityLogInsert = TablesInsert<'daily_activity_logs'>;
 export type ActivityLogUpdate = TablesUpdate<'daily_activity_logs'>;
-
 export type ActivityMedia = Tables<'activity_media'>;
 
+// Original hook - keep for backward compatibility
 export function useActivityLogs(childId?: string, date?: string) {
   return useQuery({
     queryKey: ['activity-logs', childId, date],
     queryFn: async () => {
       let query = supabase
         .from('daily_activity_logs')
-        .select(`
-          *,
-          activity_media (*)
-        `)
+        .select('*')
         .order('log_date', { ascending: false });
       
       if (childId) {
@@ -35,6 +32,27 @@ export function useActivityLogs(childId?: string, date?: string) {
   });
 }
 
+// NEW: Parent-specific hook that filters by child IDs
+export function useParentActivityLogs(childIds: string[]) {
+  return useQuery({
+    queryKey: ['parent-activity-logs', childIds],
+    queryFn: async () => {
+      if (childIds.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('daily_activity_logs')
+        .select('*')
+        .in('child_id', childIds)
+        .order('log_date', { ascending: false })
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data as ActivityLog[];
+    },
+    enabled: childIds.length > 0,
+  });
+}
+
 export function useActivityLog(logId: string | undefined) {
   return useQuery({
     queryKey: ['activity-log', logId],
@@ -43,10 +61,7 @@ export function useActivityLog(logId: string | undefined) {
       
       const { data, error } = await supabase
         .from('daily_activity_logs')
-        .select(`
-          *,
-          activity_media (*)
-        `)
+        .select('*')
         .eq('id', logId)
         .maybeSingle();
       
@@ -73,6 +88,8 @@ export function useCreateActivityLog() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-activity-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['today-activity-logs'] });
     },
   });
 }
@@ -94,10 +111,61 @@ export function useUpdateActivityLog() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-activity-logs'] });
       queryClient.invalidateQueries({ queryKey: ['activity-log', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['today-activity-logs'] });
     },
   });
 }
+
+// NEW: Toggle acknowledgement
+export function useToggleAcknowledgement() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ activityId, isAcknowledged }: { activityId: string; isAcknowledged: boolean }) => {
+      const { data, error } = await supabase
+        .from('daily_activity_logs')
+        .update({ is_acknowledged: !isAcknowledged })
+        .eq('id', activityId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-activity-logs'] });
+    },
+  });
+}
+
+export function useTodayActivityLogs(childIds: string[]) {
+  const today = new Date().toISOString().split('T')[0];
+  
+  return useQuery({
+    queryKey: ['today-activity-logs', childIds, today],
+    queryFn: async () => {
+      if (childIds.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('daily_activity_logs')
+        .select('id, child_id, log_date, arrival_time, pickup_time, activities, mood, nap_duration, general_notes')
+        .in('child_id', childIds)
+        .eq('log_date', today)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: childIds.length > 0,
+  });
+}
+
+// LEGACY: Keep for backward compatibility with activity_media table
+// (even though we're using activity_media_url column now)
 
 export function useAddActivityMedia() {
   const queryClient = useQueryClient();
@@ -119,7 +187,7 @@ export function useAddActivityMedia() {
         .from('activity-photos')
         .getPublicUrl(fileName);
       
-      // Save to database
+      // Save to database (activity_media table)
       const { data, error } = await supabase
         .from('activity_media')
         .insert({
@@ -136,6 +204,7 @@ export function useAddActivityMedia() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-activity-logs'] });
     },
   });
 }
@@ -154,6 +223,7 @@ export function useDeleteActivityMedia() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-activity-logs'] });
     },
   });
 }

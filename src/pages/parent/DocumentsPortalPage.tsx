@@ -122,6 +122,7 @@ const DocumentsPortalPage: React.FC = () => {
 
   return (
     <DashboardLayout>
+      <div className='p-4 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
       <PageHeader
         title="Documents Portal"
         description="Manage required documents for your children"
@@ -176,7 +177,7 @@ const DocumentsPortalPage: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <Card className="shadow-card mb-6">
+      <Card className="shadow-card">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center gap-2">
@@ -213,6 +214,7 @@ const DocumentsPortalPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+      </div>
 
       {/* Documents List */}
       <Card className="shadow-card">
@@ -233,7 +235,7 @@ const DocumentsPortalPage: React.FC = () => {
                 const warning = getDueDateWarning(doc.due_date);
 
                 return (
-                  <div key={doc.id} className="p-4 flex flex-col lg:flex-row lg:items-center gap-4">
+                  <div key={doc.id} className="p-4 flex flex-row items-center gap-4">
                     <div className="flex items-start gap-4 flex-1">
                       <div className="p-3 bg-muted rounded-xl">
                         <FileText className="h-5 w-5 text-muted-foreground" />

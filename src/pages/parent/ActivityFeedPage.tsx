@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,9 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useSupabaseAuth } from '@/hooks/useSupabaseAuth';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/contexts/AuthContext';
 import { useParentChildren } from '@/hooks/useChildren';
-import { useActivityLogs } from '@/hooks/useActivityLogs';
+import { useParentActivityLogs, useToggleAcknowledgement } from '@/hooks/useActivityLogs';
+import { useSendActivityMessage } from '@/hooks/useMessages';
 import { useUser } from '@/hooks/useUsers';
 import { 
   Calendar as CalendarIcon, 
@@ -34,13 +38,21 @@ import {
 } from 'lucide-react';
 import { format, isWithinInterval, parseISO, subDays } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 const ActivityFeedPage: React.FC = () => {
-  const { profile } = useSupabaseAuth();
-  const { data: children = [], isLoading: loadingChildren } = useParentChildren(profile?.id);
-  const { data: activityLogs = [], isLoading: loadingActivities } = useActivityLogs();
-  const { toast } = useToast();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { data: children = [], isLoading: loadingChildren } = useParentChildren(user?.id);
+  
+  // Memoize child IDs to prevent unnecessary re-renders
+  const childIds = useMemo(() => children.map(c => c.id), [children]);
+  
+  // Only fetch activities when we have child IDs
+  const { data: activityLogs = [], isLoading: loadingActivities } = useParentActivityLogs(childIds);
+  
+  const toggleAcknowledgement = useToggleAcknowledgement();
+  const sendActivityMessage = useSendActivityMessage();
 
   const [selectedChild, setSelectedChild] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,33 +60,34 @@ const ActivityFeedPage: React.FC = () => {
     from: subDays(new Date(), 7),
     to: new Date()
   });
-  const [likedActivities, setLikedActivities] = useState<Set<string>>(new Set());
-
-  const childIds = children.map(c => c.id);
   
-  // Filter activities for this parent's children
-  const myActivities = activityLogs.filter(log => childIds.includes(log.child_id));
+  // Comment dialog state
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState<any>(null);
+  const [commentText, setCommentText] = useState('');
 
   // Apply filters
-  const filteredActivities = myActivities.filter(log => {
-    // Child filter
-    const matchesChild = selectedChild === 'all' || log.child_id === selectedChild;
-    
-    // Date filter
-    const logDate = parseISO(log.log_date);
-    const matchesDate = dateRange.from && dateRange.to 
-      ? isWithinInterval(logDate, { start: dateRange.from, end: dateRange.to })
-      : true;
-    
-    // Search filter
-    const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = !searchQuery || 
-      log.activities?.toLowerCase().includes(searchLower) ||
-      log.general_notes?.toLowerCase().includes(searchLower) ||
-      log.mood?.toLowerCase().includes(searchLower);
-    
-    return matchesChild && matchesDate && matchesSearch;
-  }).sort((a, b) => new Date(b.log_date).getTime() - new Date(a.log_date).getTime());
+  const filteredActivities = useMemo(() => {
+    return activityLogs.filter(log => {
+      // Child filter
+      const matchesChild = selectedChild === 'all' || log.child_id === selectedChild;
+      
+      // Date filter
+      const logDate = parseISO(log.log_date);
+      const matchesDate = dateRange.from && dateRange.to 
+        ? isWithinInterval(logDate, { start: dateRange.from, end: dateRange.to })
+        : true;
+      
+      // Search filter
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch = !searchQuery || 
+        log.activities?.toLowerCase().includes(searchLower) ||
+        log.general_notes?.toLowerCase().includes(searchLower) ||
+        log.mood?.toLowerCase().includes(searchLower);
+      
+      return matchesChild && matchesDate && matchesSearch;
+    }).sort((a, b) => new Date(b.log_date).getTime() - new Date(a.log_date).getTime());
+  }, [activityLogs, selectedChild, dateRange, searchQuery]);
 
   const getMoodIcon = (mood: string | null) => {
     const icons = {
@@ -89,34 +102,60 @@ const ActivityFeedPage: React.FC = () => {
 
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase();
 
-  const toggleLike = (activityId: string) => {
-    setLikedActivities(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(activityId)) {
-        newSet.delete(activityId);
-      } else {
-        newSet.add(activityId);
-      }
-      return newSet;
-    });
-    toast({
-      title: likedActivities.has(activityId) ? "Reaction removed" : "Activity liked!",
-      description: "Your reaction has been recorded."
-    });
+  const handleToggleLike = async (activity: any) => {
+    try {
+      await toggleAcknowledgement.mutateAsync({
+        activityId: activity.id,
+        isAcknowledged: activity.is_acknowledged || false
+      });
+      toast.success(activity.is_acknowledged ? 'Acknowledgement removed' : 'Activity acknowledged!');
+    } catch (error: any) {
+      toast.error('Failed to update acknowledgement');
+    }
   };
 
-  const handleDownloadPhotos = (activityId: string, date: string) => {
-    toast({
-      title: "Download started",
-      description: `Downloading photos from ${format(parseISO(date), 'MMM d, yyyy')}`
-    });
+  const handleCommentClick = (activity: any) => {
+    setSelectedActivity(activity);
+    setCommentDialogOpen(true);
+  };
+
+  const handleSendComment = async () => {
+    if (!commentText.trim() || !selectedActivity || !user?.id) return;
+
+    const child = children.find(c => c.id === selectedActivity.child_id);
+    if (!child) return;
+
+    try {
+      await sendActivityMessage.mutateAsync({
+        senderId: user.id,
+        recipientId: selectedActivity.created_by,
+        childId: selectedActivity.child_id,
+        activityDate: format(parseISO(selectedActivity.log_date), 'MMM d, yyyy'),
+        content: commentText
+      });
+      
+      toast.success('Message sent to teacher');
+      setCommentDialogOpen(false);
+      setCommentText('');
+      setSelectedActivity(null);
+    } catch (error: any) {
+      toast.error('Failed to send message');
+    }
+  };
+
+  const handleDownloadPhoto = (url: string, activityDate: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `activity-photo-${activityDate}.jpg`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Download started');
   };
 
   const handlePrintSummary = () => {
-    toast({
-      title: "Preparing print",
-      description: "Activity summary is being prepared for printing."
-    });
+    toast.info('Preparing print summary...');
     window.print();
   };
 
@@ -131,11 +170,27 @@ const ActivityFeedPage: React.FC = () => {
 
   const hasActiveFilters = selectedChild !== 'all' || searchQuery.length > 0;
 
-  if (loadingChildren || loadingActivities) {
+  // Show loading state while children are loading
+  if (loadingChildren) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
           <Loader2 className="w-8 h-8 animate-spin" />
+          <span className="ml-2 text-muted-foreground">Loading your children...</span>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Show message if no children
+  if (!loadingChildren && children.length === 0) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="text-muted-foreground mb-2">No children found</p>
+            <p className="text-sm text-muted-foreground">Please contact your daycare administrator</p>
+          </div>
         </div>
       </DashboardLayout>
     );
@@ -143,102 +198,119 @@ const ActivityFeedPage: React.FC = () => {
 
   return (
     <DashboardLayout>
-      <PageHeader
-        title="Activity Feed"
-        description="View your children's daily activities and milestones"
-      />
+      <div className='p-4 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
+        <PageHeader
+          title="Activity Feed"
+          description="View your children's daily activities and milestones"
+        />
 
-      {/* Filters */}
-      <Card className="shadow-card mb-6">
-        <CardContent className="p-4">
-          <div className="space-y-4">
-            {/* Search Bar */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Search activities, notes, or moods..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-10"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            {/* Filter Row */}
-            <div className="flex flex-wrap gap-4 items-center">
-              <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Filters:</span>
+        {/* Filters */}
+        <Card className="shadow-card">
+          <CardContent className="p-4">
+            <div className="space-y-4">
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search activities, notes, or moods..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-10"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label='close button'
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
-              
-              <Select value={selectedChild} onValueChange={setSelectedChild}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Select child" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Children</SelectItem>
-                  {children.map(child => (
-                    <SelectItem key={child.id} value={child.id}>
-                      {child.first_name} {child.last_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
 
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <CalendarIcon className="h-4 w-4" />
-                    {dateRange.from && dateRange.to 
-                      ? `${format(dateRange.from, 'MMM d')} - ${format(dateRange.to, 'MMM d')}`
-                      : 'Select dates'}
-                    <ChevronDown className="h-4 w-4" />
+              {/* Filter Row */}
+              <div className="flex flex-wrap gap-4 items-center">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Filters:</span>
+                </div>
+                
+                <Select value={selectedChild} onValueChange={setSelectedChild}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Select child" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Children</SelectItem>
+                    {children.map(child => (
+                      <SelectItem key={child.id} value={child.id}>
+                        {child.first_name} {child.last_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="gap-2">
+                      <CalendarIcon className="h-4 w-4" />
+                      {dateRange.from && dateRange.to 
+                        ? `${format(dateRange.from, 'MMM d')} - ${format(dateRange.to, 'MMM d')}`
+                        : 'Select dates'}
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="range"
+                      selected={{ from: dateRange.from, to: dateRange.to }}
+                      onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })}
+                      numberOfMonths={2}
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                {hasActiveFilters && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters}>
+                    <X className="h-4 w-4 mr-2" />
+                    Clear Filters
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="range"
-                    selected={{ from: dateRange.from, to: dateRange.to }}
-                    onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })}
-                    numberOfMonths={2}
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
+                )}
 
-              {hasActiveFilters && (
-                <Button variant="ghost" size="sm" onClick={clearFilters}>
-                  <X className="h-4 w-4 mr-2" />
-                  Clear Filters
-                </Button>
-              )}
+                <div className="ml-auto flex gap-2">
+                  <Button variant="outline" size="sm" onClick={handlePrintSummary}>
+                    <Printer className="h-4 w-4 mr-2" />
+                    Print Summary
+                  </Button>
+                </div>
+              </div>
 
-              <div className="ml-auto flex gap-2">
-                <Button variant="outline" size="sm" onClick={handlePrintSummary}>
-                  <Printer className="h-4 w-4 mr-2" />
-                  Print Summary
-                </Button>
+              {/* Results Count */}
+              <div className="text-sm text-muted-foreground">
+                {loadingActivities ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Loading activities...
+                  </span>
+                ) : (
+                  <>Showing {filteredActivities.length} {filteredActivities.length === 1 ? 'activity' : 'activities'}</>
+                )}
               </div>
             </div>
-
-            {/* Results Count */}
-            <div className="text-sm text-muted-foreground">
-              Showing {filteredActivities.length} {filteredActivities.length === 1 ? 'activity' : 'activities'}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Activity Feed */}
       <div className="space-y-4">
-        {filteredActivities.length === 0 ? (
+        {loadingActivities ? (
+          <Card className="shadow-card">
+            <CardContent className="p-12 text-center">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+              <p className="text-muted-foreground">Loading activities...</p>
+            </CardContent>
+          </Card>
+        ) : filteredActivities.length === 0 ? (
           <Card className="shadow-card">
             <CardContent className="p-12 text-center">
               <p className="text-muted-foreground mb-2">
@@ -256,8 +328,8 @@ const ActivityFeedPage: React.FC = () => {
         ) : (
           filteredActivities.map(activity => {
             const child = children.find(c => c.id === activity.child_id);
-            const isLiked = likedActivities.has(activity.id);
-            const hasPhotos = activity.activity_media && activity.activity_media.length > 0;
+            const isAcknowledged = activity.is_acknowledged || false;
+            const hasPhoto = activity.activity_media_url && activity.activity_media_url.trim().length > 0;
 
             return (
               <Card key={activity.id} className="shadow-card card-hover">
@@ -333,24 +405,19 @@ const ActivityFeedPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Photos */}
-                  {hasPhotos && (
-                    <div className="grid grid-cols-4 gap-2 mb-4">
-                      {activity.activity_media.map((media, idx) => (
-                        <div key={media.id} className="aspect-square bg-muted rounded-lg overflow-hidden">
-                          {media.media_type === 'image' ? (
-                            <img 
-                              src={media.media_url} 
-                              alt={media.caption || `Photo ${idx + 1}`}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                  {/* Photo */}
+                  {hasPhoto && (
+                    <div className="mb-4">
+                      <div className="relative rounded-lg overflow-hidden bg-muted">
+                        <img 
+                          src={activity.activity_media_url} 
+                          alt={`Activity from ${activity.log_date}`}
+                          className="w-full max-h-96 object-contain"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
                     </div>
                   )}
 
@@ -360,24 +427,29 @@ const ActivityFeedPage: React.FC = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => toggleLike(activity.id)}
-                        className={cn(isLiked && "text-destructive")}
+                        onClick={() => handleToggleLike(activity)}
+                        className={cn(isAcknowledged && "text-pink-600")}
+                        disabled={toggleAcknowledgement.isPending}
                       >
-                        <Heart className={cn("h-4 w-4 mr-1", isLiked && "fill-current")} />
-                        {isLiked ? 'Liked' : 'Like'}
+                        <Heart className={cn("h-4 w-4 mr-1", isAcknowledged && "fill-current")} />
+                        {isAcknowledged ? 'Acknowledged' : 'Acknowledge'}
                       </Button>
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleCommentClick(activity)}
+                      >
                         <MessageSquare className="h-4 w-4 mr-1" />
                         Comment
                       </Button>
-                      {hasPhotos && (
+                      {hasPhoto && (
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          onClick={() => handleDownloadPhotos(activity.id, activity.log_date)}
+                          onClick={() => handleDownloadPhoto(activity.activity_media_url, activity.log_date)}
                         >
                           <Download className="h-4 w-4 mr-1" />
-                          Download ({activity.activity_media.length})
+                          Download
                         </Button>
                       )}
                     </div>
@@ -389,6 +461,44 @@ const ActivityFeedPage: React.FC = () => {
           })
         )}
       </div>
+
+      {/* Comment Dialog */}
+      <Dialog open={commentDialogOpen} onOpenChange={setCommentDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Message to Teacher</DialogTitle>
+            <DialogDescription>
+              {selectedActivity && (
+                <>
+                  Regarding activity on {format(parseISO(selectedActivity.log_date), 'MMMM d, yyyy')} for{' '}
+                  {children.find(c => c.id === selectedActivity.child_id)?.first_name}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              placeholder="Type your message here..."
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              rows={5}
+              className="resize-none"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCommentDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSendComment}
+              disabled={!commentText.trim() || sendActivityMessage.isPending}
+            >
+              {sendActivityMessage.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Send Message
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

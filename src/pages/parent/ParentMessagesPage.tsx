@@ -109,17 +109,19 @@ const ParentMessagesPage: React.FC = () => {
 
   return (
     <DashboardLayout>
+      <div className='px-4 py-2 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
       <PageHeader 
         title="Messages" 
         description="Communicate with your children's teachers"
       />
+      </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-200px)]">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-150px)]">
         {/* Conversations List */}
         <Card className="shadow-card overflow-hidden flex flex-col">
-          <div className="p-4 border-b space-y-3">
+          <div className="p-4 border-b space-y-3 bg-[#97CFCA] ">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Inbox</h3>
+              <h3 className="font-extrabold text-slate-700">Inbox</h3>
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -160,15 +162,16 @@ const ParentMessagesPage: React.FC = () => {
             )}
           </div>
         </Card>
+        
 
         {/* Messages */}
         <Card className="lg:col-span-2 shadow-card flex flex-col">
           {selectedConvo && selectedUser ? (
             <>
               {/* Header */}
-              <div className="p-4 border-b flex items-center gap-3">
+              <div className="p-4 border-b flex items-center gap-3 bg-[#97CFCA]">
                 <Avatar>
-                  <AvatarFallback className="bg-primary/10 text-primary">
+                  <AvatarFallback className="bg-white text-primary">
                     {getInitials(selectedUser.full_name)}
                   </AvatarFallback>
                 </Avatar>

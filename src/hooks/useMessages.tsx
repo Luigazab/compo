@@ -85,6 +85,49 @@ export function useSendMessage() {
   });
 }
 
+// NEW: Send message about activity
+export function useSendActivityMessage() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ 
+      senderId, 
+      recipientId, 
+      childId, 
+      activityDate,
+      content 
+    }: { 
+      senderId: string; 
+      recipientId: string; 
+      childId: string;
+      activityDate: string;
+      content: string;
+    }) => {
+      // Prefix the message with activity reference
+      const messageContent = `📅 Re: Activity on ${activityDate}\n\n${content}`;
+      
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          sender_id: senderId,
+          recipient_id: recipientId,
+          child_id: childId,
+          content: messageContent,
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      queryClient.invalidateQueries({ queryKey: ['conversation'] });
+      queryClient.invalidateQueries({ queryKey: ['unread-messages'] });
+    },
+  });
+}
+
 export function useMarkAsRead() {
   const queryClient = useQueryClient();
   

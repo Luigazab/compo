@@ -68,7 +68,7 @@ const WellbeingReportsPage: React.FC = () => {
   const getSeverityColor = (severity: string | null) => {
     const colors: Record<string, string> = {
       low: 'bg-success/10 text-success border-success/20',
-      medium: 'bg-warning/10 text-warning border-warning/20',
+      medium: 'bg-warning/10 text-warning border-warning',
       high: 'bg-destructive/10 text-destructive border-destructive/20'
     };
     return colors[severity || 'low'] || colors.low;
@@ -122,13 +122,14 @@ const WellbeingReportsPage: React.FC = () => {
 
   return (
     <DashboardLayout>
+      <div className='p-4 lg:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
       <PageHeader
         title="Wellbeing Reports"
         description="View health, behavior, and incident reports for your children"
       />
 
       {/* Filters */}
-      <Card className="shadow-card mb-6">
+      <Card className="shadow-card">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center gap-2">
@@ -177,6 +178,7 @@ const WellbeingReportsPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+      </div>
 
       {/* Reports List */}
       <div className="space-y-4">
@@ -194,7 +196,7 @@ const WellbeingReportsPage: React.FC = () => {
             return (
               <Card key={report.id} className={cn('shadow-card', getSeverityColor(report.severity))}>
                 <CardContent className="p-6">
-                  <div className="flex flex-col lg:flex-row lg:items-start gap-4">
+                  <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                     {/* Left: Icon and Child Info */}
                     <div className="flex items-start gap-4 flex-1">
                       <div className={cn(
@@ -227,7 +229,7 @@ const WellbeingReportsPage: React.FC = () => {
                         </p>
                         <p className="text-foreground mb-3">{report.description}</p>
                         {report.action_taken && (
-                          <div className="bg-background/50 rounded-lg p-3">
+                          <div className="bg-background rounded-lg p-3">
                             <p className="text-sm">
                               <strong>Action taken:</strong> {report.action_taken}
                             </p>
@@ -238,13 +240,14 @@ const WellbeingReportsPage: React.FC = () => {
 
                     {/* Right: Actions */}
                     <div className="flex flex-col gap-2 lg:w-48">
+                      <div className='grid gap-2 grid-cols-2 sm:grid-cols-1'>
                       {!isAcknowledged ? (
                         <Button onClick={() => handleAcknowledge(report.id)} className="gap-2">
                           <CheckCircle className="h-4 w-4" />
                           Acknowledge
                         </Button>
                       ) : (
-                        <Badge className="justify-center py-2 bg-success/10 text-success">
+                        <Badge className="justify-center py-2 bg-success/60 text-white">
                           <CheckCircle className="h-4 w-4 mr-1" />
                           Acknowledged
                         </Badge>
@@ -257,14 +260,15 @@ const WellbeingReportsPage: React.FC = () => {
                         <MessageSquare className="h-4 w-4" />
                         Reply
                       </Button>
-                      <div className="flex gap-2">
+                      </div>
+                      {/* <div className="flex gap-2">
                         <Button variant="outline" size="icon" onClick={() => handleDownload(report)}>
                           <Download className="h-4 w-4" />
                         </Button>
                         <Button variant="outline" size="icon" onClick={handlePrint}>
                           <Printer className="h-4 w-4" />
                         </Button>
-                      </div>
+                      </div> */}
                       <ReporterInfo reporterId={report.created_by} />
                     </div>
                   </div>
@@ -297,7 +301,7 @@ const WellbeingReportsPage: React.FC = () => {
               rows={4}
             />
           </div>
-          <DialogFooter>
+          <DialogFooter  className='grid grid-cols-2 gap-2'>
             <Button variant="outline" onClick={() => setReplyDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleReply} disabled={!replyMessage.trim()}>Send Reply</Button>
           </DialogFooter>

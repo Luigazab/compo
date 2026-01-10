@@ -92,13 +92,14 @@ const ParentAnnouncementsPage: React.FC = () => {
 
   return (
     <DashboardLayout>
+      <div className='p-4 bg-[#97CFCA] md:bg-transparent rounded-lg mb-8 shadow-lg md:shadow-none'>
       <PageHeader
         title="Announcements"
         description="Stay updated with news from the daycare"
       />
 
       {/* View Toggle and Filters */}
-      <Card className="shadow-card mb-6">
+      <Card className="shadow-card">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-4 items-center justify-between">
             <div className="flex flex-wrap gap-4 items-center">
@@ -135,6 +136,7 @@ const ParentAnnouncementsPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+      </div>
 
       {isLoading ? (
         <div className="space-y-4">
@@ -205,7 +207,7 @@ const ParentAnnouncementsPage: React.FC = () => {
                 mode="single"
                 selected={selectedDate}
                 onSelect={setSelectedDate}
-                className="rounded-md border pointer-events-auto w-full max-w-[350px]"
+                className="rounded-md border pointer-events-auto w-full max-w-[350px] flex justify-center"
                 modifiers={{
                   hasEvent: eventsWithDates.map(e => parseISO(e.event_date!))
                 }}
@@ -257,7 +259,7 @@ const ParentAnnouncementsPage: React.FC = () => {
                           {format(parseISO(ann.event_date!), 'EEEE, MMMM d, yyyy')}
                         </p>
                       </div>
-                      <Button 
+                      {/* <Button 
                         variant="outline" 
                         size="sm"
                         onClick={() => handleExportEvent(ann)}
@@ -265,7 +267,7 @@ const ParentAnnouncementsPage: React.FC = () => {
                       >
                         <Download className="h-4 w-4" />
                         Add to Calendar
-                      </Button>
+                      </Button> */}
                     </div>
                     <p className="text-sm text-foreground">{ann.content}</p>
                   </div>
@@ -341,14 +343,14 @@ const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
                   {getAuthorName(announcement.created_by)}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
+              {/* <div className="flex items-center gap-2">
                 {announcement.event_date && (
                   <Button variant="outline" size="sm" onClick={onExport}>
                     <Download className="h-4 w-4 mr-1" />
                     Add to Calendar
                   </Button>
                 )}
-              </div>
+              </div> */}
             </div>
           </div>
         </div>
