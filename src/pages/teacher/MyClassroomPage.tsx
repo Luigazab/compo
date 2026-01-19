@@ -51,6 +51,7 @@ const MyClassroomPage: React.FC = () => {
 
   return (
     <DashboardLayout>
+      <div className='p-4 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
       <PageHeader
         title="My Classroom"
         description={teacherClassroom ? `${teacherClassroom.name} • ${teacherClassroom.age_group || 'All ages'}` : 'Loading...'}
@@ -63,6 +64,7 @@ const MyClassroomPage: React.FC = () => {
           </div>
         }
       />
+      </div>
 
       {/* Filters */}
       <div className="bg-card rounded-xl border p-4 mb-6 shadow-card">

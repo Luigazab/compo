@@ -123,6 +123,7 @@ const WellbeingReportsPage: React.FC = () => {
 
   return (
     <DashboardLayout>
+      <div className='p-4 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
       <PageHeader
         title="Wellbeing Reports"
         description="Document and track incidents, illnesses, and behavioral notes"
@@ -133,6 +134,7 @@ const WellbeingReportsPage: React.FC = () => {
           </Button>
         }
       />
+      </div>
 
       {/* New Report Form */}
       {showForm && (

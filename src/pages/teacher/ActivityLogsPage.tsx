@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { ActivityCard } from '@/components/ui/activity-card';
 import { useChildren } from '@/hooks/useChildren';
-import { useActivityLogs, useCreateActivityLog, useAddActivityMedia } from '@/hooks/useActivityLogs';
+import { useActivityLogs, useCreateActivityLog } from '@/hooks/useActivityLogs';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus,
@@ -50,7 +50,6 @@ const ActivityLogsPage: React.FC = () => {
   const { data: children = [], isLoading: childrenLoading } = useChildren();
   const { data: activityLogs = [], isLoading: logsLoading } = useActivityLogs();
   const createActivityLog = useCreateActivityLog();
-  const addActivityMedia = useAddActivityMedia();
   
   const [showForm, setShowForm] = useState(false);
   const [selectedChild, setSelectedChild] = useState('');
@@ -71,28 +70,24 @@ const ActivityLogsPage: React.FC = () => {
     
     setIsSubmitting(true);
     try {
-      // Create activity log first
-      const log = await createActivityLog.mutateAsync({
-        child_id: selectedChild,
-        created_by: user.id,
-        arrival_time: formData.arrivalTime || null,
-        pickup_time: formData.pickupTime || null,
-        activities: formData.activities || null,
-        nap_duration: formData.napDuration || null,
-        bathroom_notes: formData.bathroomNotes || null,
-        general_notes: formData.generalNotes || null,
-        mood: selectedMood,
-      });
+      // Only use the first photo (since we only have one column)
+      const photo = photos.length > 0 ? photos[0] : undefined;
       
-      // Upload photos if any
-      if (photos.length > 0) {
-        for (const photo of photos) {
-          await addActivityMedia.mutateAsync({
-            activityLogId: log.id,
-            file: photo,
-          });
-        }
-      }
+      // Create activity log with photo
+      await createActivityLog.mutateAsync({
+        log: {
+          child_id: selectedChild,
+          created_by: user.id,
+          arrival_time: formData.arrivalTime || null,
+          pickup_time: formData.pickupTime || null,
+          activities: formData.activities || null,
+          nap_duration: formData.napDuration || null,
+          bathroom_notes: formData.bathroomNotes || null,
+          general_notes: formData.generalNotes || null,
+          mood: selectedMood,
+        },
+        photo,
+      });
       
       toast({
         title: isDraft ? 'Draft saved!' : 'Activity log published!',
@@ -101,6 +96,7 @@ const ActivityLogsPage: React.FC = () => {
           : 'Parents have been notified about the activity.',
       });
       
+      // Reset form
       setShowForm(false);
       setSelectedChild('');
       setPhotos([]);
@@ -113,9 +109,10 @@ const ActivityLogsPage: React.FC = () => {
         generalNotes: '',
       });
     } catch (error) {
+      console.error('Error saving activity log:', error);
       toast({
         title: 'Error',
-        description: 'Failed to save activity log.',
+        description: 'Failed to save activity log. Please try again.',
         variant: 'destructive',
       });
     }
@@ -141,16 +138,18 @@ const ActivityLogsPage: React.FC = () => {
 
   return (
     <DashboardLayout>
-      <PageHeader
-        title="Daily Activity Logs"
-        description="Record and track daily activities for each child"
-        actions={
-          <Button onClick={() => setShowForm(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            New Log
-          </Button>
-        }
-      />
+      <div className='p-4 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
+        <PageHeader
+          title="Daily Activity Logs"
+          description="Record and track daily activities for each child"
+          actions={
+            <Button onClick={() => setShowForm(true)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              New Log
+            </Button>
+          }
+        />
+      </div>
 
       {/* New Activity Form */}
       {showForm && (
@@ -327,14 +326,19 @@ const ActivityLogsPage: React.FC = () => {
                   />
                 </div>
 
-                {/* Photo Upload */}
+                {/* Photo Upload - Only one photo */}
                 <div className="space-y-2">
-                  <Label>Photos</Label>
+                  <Label>Photo (optional)</Label>
                   <PhotoUpload
-                    maxFiles={5}
+                    maxFiles={1}
                     maxSizeMB={10}
                     onPhotosChange={setPhotos}
                   />
+                  {photos.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Note: Only one photo can be uploaded per activity log
+                    </p>
+                  )}
                 </div>
 
                 {/* Actions */}

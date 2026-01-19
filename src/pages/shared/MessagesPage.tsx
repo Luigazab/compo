@@ -105,12 +105,14 @@ const MessagesPage: React.FC = () => {
 
   return (
     <DashboardLayout>
+      <div className='p-4 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
       <PageHeader title="Messages" description="Communicate with parents and teachers" />
+      </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-200px)]">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-130px)]">
         {/* Conversations List */}
         <Card className="shadow-card overflow-hidden">
-          <div className="p-4 border-b">
+          <div className="p-4 border-b  bg-[#97CFCA]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
@@ -148,14 +150,14 @@ const MessagesPage: React.FC = () => {
         </Card>
 
         {/* Messages */}
-        <Card className="lg:col-span-2 shadow-card flex flex-col">
+        <Card className="lg:col-span-2 shadow-card flex flex-col ">
           {selectedConvo && selectedUser ? (
             <>
-              <div className="p-4 border-b flex items-center gap-3">
-                <Avatar><AvatarFallback className="bg-primary/10 text-primary">{getInitials(selectedUser.full_name)}</AvatarFallback></Avatar>
+              <div className="p-4 border-b flex items-center gap-3  bg-[#97CFCA]">
+                <Avatar><AvatarFallback className="bg-white text-primary">{getInitials(selectedUser.full_name)}</AvatarFallback></Avatar>
                 <div>
-                  <p className="font-semibold">{selectedUser.full_name}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{selectedUser.role}</p>
+                  <p className="font-extrabold text-slate-700">{selectedUser.full_name}</p>
+                  <p className="text-xs text-muted-foreground font-semibold capitalize">{selectedUser.role}</p>
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-4">

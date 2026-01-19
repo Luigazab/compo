@@ -5,7 +5,6 @@ import { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/type
 export type ActivityLog = Tables<'daily_activity_logs'>;
 export type ActivityLogInsert = TablesInsert<'daily_activity_logs'>;
 export type ActivityLogUpdate = TablesUpdate<'daily_activity_logs'>;
-export type ActivityMedia = Tables<'activity_media'>;
 
 // Original hook - keep for backward compatibility
 export function useActivityLogs(childId?: string, date?: string) {
@@ -72,19 +71,45 @@ export function useActivityLog(logId: string | undefined) {
   });
 }
 
+// NEW: Create activity log with photo upload
 export function useCreateActivityLog() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (log: ActivityLogInsert) => {
-      const { data, error } = await supabase
+    mutationFn: async (data: { log: ActivityLogInsert; photo?: File }) => {
+      let photoUrl: string | null = null;
+      
+      // Upload photo first if provided
+      if (data.photo) {
+        const fileExt = data.photo.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('activity-photos')
+          .upload(fileName, data.photo);
+        
+        if (uploadError) throw uploadError;
+        
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('activity-photos')
+          .getPublicUrl(fileName);
+        
+        photoUrl = publicUrl;
+      }
+      
+      // Create activity log with photo URL
+      const { data: activityLog, error } = await supabase
         .from('daily_activity_logs')
-        .insert(log)
+        .insert({
+          ...data.log,
+          activity_media_url: photoUrl,
+        })
         .select()
         .single();
       
       if (error) throw error;
-      return data;
+      return activityLog;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
@@ -161,69 +186,5 @@ export function useTodayActivityLogs(childIds: string[]) {
       return data;
     },
     enabled: childIds.length > 0,
-  });
-}
-
-// LEGACY: Keep for backward compatibility with activity_media table
-// (even though we're using activity_media_url column now)
-
-export function useAddActivityMedia() {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async ({ activityLogId, file, caption }: { activityLogId: string; file: File; caption?: string }) => {
-      // Upload to storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${activityLogId}/${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('activity-photos')
-        .upload(fileName, file);
-      
-      if (uploadError) throw uploadError;
-      
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('activity-photos')
-        .getPublicUrl(fileName);
-      
-      // Save to database (activity_media table)
-      const { data, error } = await supabase
-        .from('activity_media')
-        .insert({
-          activity_log_id: activityLogId,
-          media_url: publicUrl,
-          caption,
-          media_type: file.type.startsWith('image/') ? 'image' : 'video',
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
-      queryClient.invalidateQueries({ queryKey: ['parent-activity-logs'] });
-    },
-  });
-}
-
-export function useDeleteActivityMedia() {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async (mediaId: string) => {
-      const { error } = await supabase
-        .from('activity_media')
-        .delete()
-        .eq('id', mediaId);
-      
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
-      queryClient.invalidateQueries({ queryKey: ['parent-activity-logs'] });
-    },
   });
 }

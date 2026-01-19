@@ -55,10 +55,12 @@ const TeacherDashboard: React.FC = () => {
 
   return (
     <DashboardLayout>
-      <PageHeader
-        title={`Good morning, ${user?.full_name?.split(' ')[0]}! 👋`}
-        description="Here's what's happening in your classroom today"
-      />
+      <div className='px-4 py-2 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
+        <PageHeader
+          title={`Good morning, ${user?.full_name?.split(' ')[0]}!`}
+          description="Here's what's happening in your classroom today"
+        />
+      </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

@@ -130,6 +130,7 @@ const MealTrackingPage: React.FC = () => {
 
   return (
     <DashboardLayout>
+      <div className='p-4 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
       <PageHeader
         title="Meal Tracking"
         description="Log and track meals for your students"
@@ -140,6 +141,7 @@ const MealTrackingPage: React.FC = () => {
           </Button>
         }
       />
+      </div>
 
       {/* Bulk Meal Entry Form */}
       {showForm && (
