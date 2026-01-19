@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { NotificationBell } from '@/components/NotificationBell';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -122,7 +123,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           </div>
           <img className="text-foreground" src="/logo.PNG" alt="ComPo" width="125px" height="auto" />
         </div>
-        <DropdownMenu>
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="p-1">
               <Avatar className="h-8 w-8">
@@ -146,6 +149,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </header>
 
       {/* Mobile Sidebar Overlay */}
