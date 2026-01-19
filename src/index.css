@@ -3,6 +3,7 @@
 @import "@fontsource/nunito/600.css";
 @import "@fontsource/nunito/700.css";
 @import "@fontsource/nunito/800.css";
+@import url("https://fonts.googleapis.com/css2?family=Montserrat&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -107,6 +108,7 @@
     --mood-energetic: 0 85% 65%;
     --mood-tired: 220 15% 60%;
     --mood-calm: 174 58% 55%;
+    --font-sans: Montserrat, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
   }
 
   .dark {
@@ -169,6 +171,7 @@
     --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.4);
     --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.5);
     --shadow-card: 0 2px 8px -2px hsl(0 0% 0% / 0.4);
+    --font-sans: Montserrat, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
   }
 }
 
