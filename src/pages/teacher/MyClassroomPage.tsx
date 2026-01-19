@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader } from '@/components/ui/page-header';
@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeacherClassrooms } from '@/hooks/useTeacherClassrooms';
-import { useChildren } from '@/hooks/useChildren';
+import { useChildrenByClassrooms } from '@/hooks/useChildren';
 import { useActivityLogs } from '@/hooks/useActivityLogs';
 import { Search, Filter, Users, GraduationCap, ArrowLeft, Baby, Calendar, AlertCircle, Eye } from 'lucide-react';
 import { format } from 'date-fns';
@@ -48,33 +48,35 @@ const MyClassroomPage: React.FC = () => {
   const { data: teacherClassrooms = [], isLoading: classroomsLoading } = useTeacherClassrooms(user?.id);
   
   // Extract classroom data
-  const classrooms: Classroom[] = teacherClassrooms.map((tc: any) => tc.classrooms).filter(Boolean);
-  
-  // Get children for selected classroom or all classrooms
-  const { data: classroomChildren = [], isLoading: childrenLoading } = useChildren(
-    selectedClassroom?.id || (activeTab !== 'all' ? activeTab : undefined)
+  const classrooms: Classroom[] = useMemo(() => 
+    teacherClassrooms.map((tc: any) => tc.classrooms).filter(Boolean),
+    [teacherClassrooms]
   );
   
-  // Get all children if viewing "all" tab
-  const allClassroomIds = classrooms.map(c => c.id);
+  // Get all classroom IDs for fetching children
+  const allClassroomIds = useMemo(() => classrooms.map(c => c.id), [classrooms]);
+  
+  // Fetch all children from all assigned classrooms
+  const { data: allChildren = [], isLoading: childrenLoading } = useChildrenByClassrooms(allClassroomIds);
   
   // Get today's logs
   const today = new Date().toISOString().split('T')[0];
   const { data: todaysLogs = [] } = useActivityLogs(undefined, today);
   
-  // Filter children based on active tab
-  const getFilteredChildrenByTab = () => {
+  // Filter children based on selected classroom and active tab
+  const getFilteredChildrenByTab = useMemo(() => {
     if (!selectedClassroom) return [];
     
     if (activeTab === 'all') {
-      return classroomChildren;
+      return allChildren.filter(child => child.classroom_id === selectedClassroom.id);
     }
     
-    return classroomChildren.filter(child => child.classroom_id === activeTab);
-  };
+    return allChildren.filter(child => child.classroom_id === activeTab);
+  }, [selectedClassroom, activeTab, allChildren]);
   
   // Apply search and status filters
-  const filteredChildren = getFilteredChildrenByTab().filter(child => {
+  const filteredChildren = useMemo(() => {
+    return getFilteredChildrenByTab.filter(child => {
     const fullName = `${child.first_name} ${child.last_name}`.toLowerCase();
     const matchesSearch = fullName.includes(searchQuery.toLowerCase());
     
@@ -87,6 +89,7 @@ const MyClassroomPage: React.FC = () => {
     
     return matchesSearch;
   });
+  }, [getFilteredChildrenByTab, searchQuery, statusFilter, todaysLogs]);
 
   const isLoading = classroomsLoading || childrenLoading;
   
@@ -131,7 +134,7 @@ const MyClassroomPage: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {classrooms.map((classroom) => {
-              const studentCount = classroomChildren.filter(c => c.classroom_id === classroom.id).length;
+              const studentCount = allChildren.filter(c => c.classroom_id === classroom.id).length;
               
               return (
                 <Card 
