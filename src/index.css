@@ -4,6 +4,7 @@
 @import "@fontsource/nunito/700.css";
 @import "@fontsource/nunito/800.css";
 @import url("https://fonts.googleapis.com/css2?family=Montserrat&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Nunito&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -13,8 +14,8 @@
 @layer base {
   :root {
     /* Core backgrounds */
-    --background: 40 33% 98%;
-    --foreground: 220 25% 20%;
+    --background: 210 40% 98.0392%;
+    --foreground: 215 25% 26.6667%;
 
     /* Cards and elevated surfaces */
     --card: 0 0% 100%;
@@ -87,9 +88,9 @@
     --gradient-hero: linear-gradient(180deg, hsl(40 33% 98%) 0%, hsl(174 30% 95%) 100%);
 
     /* Shadows */
-    --shadow-sm: 0 1px 2px 0 hsl(220 25% 20% / 0.05);
-    --shadow-md: 0 4px 6px -1px hsl(220 25% 20% / 0.08), 0 2px 4px -2px hsl(220 25% 20% / 0.05);
-    --shadow-lg: 0 10px 15px -3px hsl(220 25% 20% / 0.08), 0 4px 6px -4px hsl(220 25% 20% / 0.05);
+    --shadow-sm: 0px 1px 8.25px -4px hsla(229, 84%, 5%, 0.81);
+    --shadow-md: 0px 1px 24.75px -4px hsla(229, 84%, 5%, 0.81);
+    --shadow-lg: 0px 1px 41.25px -4px hsla(229, 84%, 5%, 0.81);
     --shadow-xl: 0 20px 25px -5px hsl(220 25% 20% / 0.1), 0 8px 10px -6px hsl(220 25% 20% / 0.05);
     --shadow-glow: 0 0 20px hsl(174 58% 55% / 0.3);
     --shadow-card: 0 2px 8px -2px hsl(220 25% 20% / 0.08), 0 4px 12px -4px hsl(220 25% 20% / 0.05);
@@ -109,6 +110,7 @@
     --mood-tired: 220 15% 60%;
     --mood-calm: 174 58% 55%;
     --font-sans: Montserrat, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+    --shadow: 0px 1px 16.5px -4px hsla(229, 84%, 5%, 0.81);
   }
 
   .dark {
@@ -166,12 +168,13 @@
     --gradient-primary: linear-gradient(135deg, hsl(174 58% 45%) 0%, hsl(180 60% 35%) 100%);
     --gradient-hero: linear-gradient(180deg, hsl(220 25% 10%) 0%, hsl(220 25% 14%) 100%);
 
-    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
-    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.4);
-    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.4);
+    --shadow-sm: 0px 1px 8.25px -4px hsla(229, 84%, 5%, 0.81);
+    --shadow-md: 0px 1px 24.75px -4px hsla(229, 84%, 5%, 0.81);
+    --shadow-lg: 0px 1px 41.25px -4px hsla(229, 84%, 5%, 0.81);
     --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.5);
     --shadow-card: 0 2px 8px -2px hsl(0 0% 0% / 0.4);
     --font-sans: Montserrat, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+    --shadow: 0px 1px 16.5px -4px hsla(229, 84%, 5%, 0.81);
   }
 }
 

@@ -15,7 +15,7 @@ export default {
   	extend: {
   		fontFamily: {
   			sans: [
-  				'Montserrat',
+  				'Nunito',
   				'ui-sans-serif',
   				'system-ui',
   				'sans-serif',
