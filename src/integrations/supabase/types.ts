@@ -230,6 +230,7 @@ export type Database = {
       daily_activity_logs: {
         Row: {
           activities: string | null
+          activity_media_url: string | null
           arrival_time: string | null
           bathroom_notes: string | null
           child_id: string
@@ -237,16 +238,16 @@ export type Database = {
           created_by: string
           general_notes: string | null
           id: string
+          is_acknowledged: boolean | null
           log_date: string
           mood: string | null
           nap_duration: string | null
           pickup_time: string | null
           updated_at: string | null
-          activity_media_url: string | null
-          is_acknowledged: boolean | null
         }
         Insert: {
           activities?: string | null
+          activity_media_url?: string | null
           arrival_time?: string | null
           bathroom_notes?: string | null
           child_id: string
@@ -254,16 +255,16 @@ export type Database = {
           created_by: string
           general_notes?: string | null
           id?: string
+          is_acknowledged?: boolean | null
           log_date?: string
           mood?: string | null
           nap_duration?: string | null
           pickup_time?: string | null
           updated_at?: string | null
-          activity_media_url?: string | null
-          is_acknowledged?: boolean | null
         }
         Update: {
           activities?: string | null
+          activity_media_url?: string | null
           arrival_time?: string | null
           bathroom_notes?: string | null
           child_id?: string
@@ -271,13 +272,12 @@ export type Database = {
           created_by?: string
           general_notes?: string | null
           id?: string
+          is_acknowledged?: boolean | null
           log_date?: string
           mood?: string | null
           nap_duration?: string | null
           pickup_time?: string | null
           updated_at?: string | null
-          activity_media_url?: string | null
-          is_acknowledged?: boolean | null
         }
         Relationships: [
           {
