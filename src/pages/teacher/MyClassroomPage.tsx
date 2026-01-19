@@ -63,16 +63,16 @@ export default function MyClassroomPage() {
   // Get selected classroom from assignment
   const selectedClassroom = selectedAssignment?.classroom || null;
   
-  // Filter children based on selected classroom and active tab
+  // Filter children based on active tab
   const getFilteredChildrenByTab = useMemo(() => {
-    if (!selectedClassroom) return [];
-    
+    // If "All Students" tab is active, show all children from all classrooms
     if (activeTab === 'all') {
-      return allChildren.filter(child => child.classroom_id === selectedClassroom.id);
+      return allChildren;
     }
     
+    // Otherwise, filter by the selected classroom tab
     return allChildren.filter(child => child.classroom_id === activeTab);
-  }, [selectedClassroom, activeTab, allChildren]);
+  }, [activeTab, allChildren]);
   
   // Apply search and status filters
   const filteredChildren = useMemo(() => {
@@ -104,9 +104,11 @@ export default function MyClassroomPage() {
     return age;
   };
 
-  // Helper to get assignment for a classroom
-  const getAssignmentForClassroom = (classroomId: string) => {
-    return teacherAssignments.find(ta => ta.classroom.id === classroomId);
+  // Get classroom name for a child
+  const getClassroomName = (classroomId: string | null) => {
+    if (!classroomId) return 'Unassigned';
+    const classroom = classrooms.find(c => c.id === classroomId);
+    return classroom?.name || 'Unknown';
   };
 
   // Classroom Selection View
@@ -157,7 +159,6 @@ export default function MyClassroomPage() {
                         <GraduationCap className="h-6 w-6 text-primary" />
                       </div>
                       <div className="flex items-center gap-2">
-                        {/* Role Badge */}
                         <Badge 
                           variant={assignment.role === 'primary' ? 'default' : 'secondary'}
                           className="gap-1"
@@ -211,25 +212,34 @@ export default function MyClassroomPage() {
       <div className='p-4 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
         <div className="flex flex-col gap-2 mb-4">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{selectedClassroom?.name}</h1>
-            <Badge 
-              variant={selectedAssignment.role === 'primary' ? 'default' : 'secondary'}
-              className="gap-1"
-            >
-              {selectedAssignment.role === 'primary' ? (
-                <>
-                  <Crown className="h-3 w-3" />
-                  Primary Teacher
-                </>
-              ) : (
-                <>
-                  <UserCheck className="h-3 w-3" />
-                  Co-Teacher
-                </>
-              )}
-            </Badge>
+            <h1 className="text-2xl font-bold">
+              {activeTab === 'all' ? 'All My Students' : selectedClassroom?.name}
+            </h1>
+            {activeTab !== 'all' && (
+              <Badge 
+                variant={selectedAssignment.role === 'primary' ? 'default' : 'secondary'}
+                className="gap-1"
+              >
+                {selectedAssignment.role === 'primary' ? (
+                  <>
+                    <Crown className="h-3 w-3" />
+                    Primary Teacher
+                  </>
+                ) : (
+                  <>
+                    <UserCheck className="h-3 w-3" />
+                    Co-Teacher
+                  </>
+                )}
+              </Badge>
+            )}
           </div>
-          <p className="text-muted-foreground">{selectedClassroom?.age_group || 'All ages'} • {filteredChildren.length} students</p>
+          <p className="text-muted-foreground">
+            {activeTab === 'all' 
+              ? `${filteredChildren.length} students across ${classrooms.length} classroom${classrooms.length !== 1 ? 's' : ''}`
+              : `${selectedClassroom?.age_group || 'All ages'} • ${filteredChildren.length} students`
+            }
+          </p>
         </div>
         <div className="flex justify-end">
           <Button 
@@ -248,20 +258,22 @@ export default function MyClassroomPage() {
         <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="all" className="gap-2">
             <Users className="h-4 w-4" />
-            All Students
+            All Students ({allChildren.length})
           </TabsTrigger>
-          {teacherAssignments.map((assignment) => (
-            <TabsTrigger 
-              key={assignment.classroom.id} 
-              value={assignment.classroom.id}
-              className="gap-2"
-              onClick={() => setSelectedAssignment(assignment)}
-            >
-              <GraduationCap className="h-4 w-4" />
-              {assignment.classroom.name}
-              {assignment.role === 'primary' && <Crown className="h-3 w-3 ml-1" />}
-            </TabsTrigger>
-          ))}
+          {teacherAssignments.map((assignment) => {
+            const classroomStudentCount = allChildren.filter(c => c.classroom_id === assignment.classroom.id).length;
+            return (
+              <TabsTrigger 
+                key={assignment.classroom.id} 
+                value={assignment.classroom.id}
+                className="gap-2"
+              >
+                <GraduationCap className="h-4 w-4" />
+                {assignment.classroom.name} ({classroomStudentCount})
+                {assignment.role === 'primary' && <Crown className="h-3 w-3 ml-1" />}
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
       </Tabs>
 
@@ -310,6 +322,7 @@ export default function MyClassroomPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Student</TableHead>
+                  {activeTab === 'all' && <TableHead>Classroom</TableHead>}
                   <TableHead>Age</TableHead>
                   <TableHead>Date of Birth</TableHead>
                   <TableHead>Allergies</TableHead>
@@ -336,6 +349,11 @@ export default function MyClassroomPage() {
                           </div>
                         </div>
                       </TableCell>
+                      {activeTab === 'all' && (
+                        <TableCell>
+                          <Badge variant="outline">{getClassroomName(child.classroom_id)}</Badge>
+                        </TableCell>
+                      )}
                       <TableCell>{age} years</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5 text-muted-foreground">

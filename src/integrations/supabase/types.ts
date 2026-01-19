@@ -702,6 +702,7 @@ export type Database = {
           parent_notified: boolean | null
           report_date: string
           severity: string | null
+          wellbeing_media_url: string | null
         }
         Insert: {
           action_taken?: string | null
@@ -714,6 +715,7 @@ export type Database = {
           parent_notified?: boolean | null
           report_date?: string
           severity?: string | null
+          wellbeing_media_url: string | null
         }
         Update: {
           action_taken?: string | null

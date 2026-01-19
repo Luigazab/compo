@@ -7,16 +7,15 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useSupabaseAuth } from '@/hooks/useSupabaseAuth';
 import { useParentChildren } from '@/hooks/useChildren';
-import { useWellbeingReports } from '@/hooks/useWellbeingReports';
+import { useWellbeingReports, useUpdateWellbeingReport } from '@/hooks/useWellbeingReports';
+import { useSendActivityMessage } from '@/hooks/useMessages';
 import { useUser } from '@/hooks/useUsers';
 import { 
   Filter,
   CheckCircle,
   Download,
-  Printer,
   MessageSquare,
   AlertTriangle,
   Thermometer,
@@ -26,12 +25,15 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 const WellbeingReportsPage: React.FC = () => {
+  const { toast } = useToast();
   const { profile } = useSupabaseAuth();
   const { data: children = [], isLoading: loadingChildren } = useParentChildren(profile?.id);
   const { data: allReports = [], isLoading: loadingReports } = useWellbeingReports();
+  const updateWellbeingReport = useUpdateWellbeingReport();
+  const sendMessage = useSendActivityMessage();
   
   const [selectedChild, setSelectedChild] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
@@ -39,7 +41,6 @@ const WellbeingReportsPage: React.FC = () => {
   const [selectedReport, setSelectedReport] = useState<any | null>(null);
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
   const [replyMessage, setReplyMessage] = useState('');
-  const [acknowledgedReports, setAcknowledgedReports] = useState<Set<string>>(new Set());
 
   const childIds = children.map(c => c.id);
 
@@ -52,8 +53,6 @@ const WellbeingReportsPage: React.FC = () => {
     const matchesType = typeFilter === 'all' || report.incident_type === typeFilter;
     return matchesChild && matchesSeverity && matchesType;
   }).sort((a, b) => new Date(b.report_date).getTime() - new Date(a.report_date).getTime());
-
-  const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase();
 
   const getTypeIcon = (type: string | null) => {
     const icons: Record<string, React.ReactNode> = {
@@ -74,38 +73,57 @@ const WellbeingReportsPage: React.FC = () => {
     return colors[severity || 'low'] || colors.low;
   };
 
-  const handleAcknowledge = (reportId: string) => {
-    setAcknowledgedReports(prev => new Set([...prev, reportId]));
-    toast({
-      title: "Report acknowledged",
-      description: "Thank you for acknowledging this report."
-    });
+  const handleAcknowledge = async (report: any) => {
+    try {
+      await updateWellbeingReport.mutateAsync({
+        id: report.id,
+        parent_notified: true,
+      });
+
+      toast({
+        title: "Report acknowledged",
+        description: "Thank you for acknowledging this report."
+      });
+    } catch (error) {
+      console.error('Error acknowledging report:', error);
+      toast({
+        title: "Error",
+        description: "Failed to acknowledge report.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleReply = () => {
-    if (!replyMessage.trim()) return;
-    toast({
-      title: "Reply sent",
-      description: "Your message has been sent to the teacher."
-    });
-    setReplyMessage('');
-    setReplyDialogOpen(false);
-    setSelectedReport(null);
-  };
+  const handleReply = async () => {
+    if (!replyMessage.trim() || !selectedReport || !profile?.id) return;
 
-  const handleDownload = (report: any) => {
-    toast({
-      title: "Downloading report",
-      description: `Report from ${format(new Date(report.report_date), 'MMM d, yyyy')} is being downloaded.`
-    });
-  };
+    const child = children.find(c => c.id === selectedReport.child_id);
+    if (!child) return;
 
-  const handlePrint = () => {
-    toast({
-      title: "Preparing to print",
-      description: "The report is being prepared for printing."
-    });
-    window.print();
+    try {
+      await sendMessage.mutateAsync({
+        senderId: profile.id,
+        recipientId: selectedReport.created_by,
+        childId: selectedReport.child_id,
+        activityDate: format(new Date(selectedReport.report_date), 'MMM d, yyyy'),
+        content: `Re: ${selectedReport.incident_type} report\n\n${replyMessage}`
+      });
+
+      toast({
+        title: "Reply sent",
+        description: "Your message has been sent to the teacher."
+      });
+      setReplyMessage('');
+      setReplyDialogOpen(false);
+      setSelectedReport(null);
+    } catch (error) {
+      console.error('Error sending reply:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send message.",
+        variant: "destructive"
+      });
+    }
   };
 
   const isLoading = loadingChildren || loadingReports;
@@ -123,61 +141,61 @@ const WellbeingReportsPage: React.FC = () => {
   return (
     <DashboardLayout>
       <div className='p-4 lg:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
-      <PageHeader
-        title="Wellbeing Reports"
-        description="View health, behavior, and incident reports for your children"
-      />
+        <PageHeader
+          title="Wellbeing Reports"
+          description="View health, behavior, and incident reports for your children"
+        />
 
-      {/* Filters */}
-      <Card className="shadow-card">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Filters:</span>
+        {/* Filters */}
+        <Card className="shadow-card">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Filters:</span>
+              </div>
+
+              <Select value={selectedChild} onValueChange={setSelectedChild}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Child" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Children</SelectItem>
+                  {children.map(child => (
+                    <SelectItem key={child.id} value={child.id}>
+                      {child.first_name} {child.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={severityFilter} onValueChange={setSeverityFilter}>
+                <SelectTrigger className="w-36">
+                  <SelectValue placeholder="Severity" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Severity</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-36">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="injury">Injury</SelectItem>
+                  <SelectItem value="illness">Illness</SelectItem>
+                  <SelectItem value="behavior">Behavior</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-
-            <Select value={selectedChild} onValueChange={setSelectedChild}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Child" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Children</SelectItem>
-                {children.map(child => (
-                  <SelectItem key={child.id} value={child.id}>
-                    {child.first_name} {child.last_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={severityFilter} onValueChange={setSeverityFilter}>
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="Severity" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Severity</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="injury">Injury</SelectItem>
-                <SelectItem value="illness">Illness</SelectItem>
-                <SelectItem value="behavior">Behavior</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Reports List */}
@@ -191,16 +209,17 @@ const WellbeingReportsPage: React.FC = () => {
         ) : (
           filteredReports.map(report => {
             const child = children.find(c => c.id === report.child_id);
-            const isAcknowledged = report.parent_notified || acknowledgedReports.has(report.id);
+            const isAcknowledged = report.parent_notified;
+            const hasPhoto = report.wellbeing_media_url && report.wellbeing_media_url.trim().length > 0;
 
             return (
               <Card key={report.id} className={cn('shadow-card', getSeverityColor(report.severity))}>
                 <CardContent className="p-6">
-                  <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                  <div className="flex flex-col lg:flex-row lg:items-start gap-4">
                     {/* Left: Icon and Child Info */}
                     <div className="flex items-start gap-4 flex-1">
                       <div className={cn(
-                        'p-3 rounded-xl',
+                        'p-3 rounded-xl flex-shrink-0',
                         report.severity === 'low' && 'bg-success/20',
                         report.severity === 'medium' && 'bg-warning/20',
                         report.severity === 'high' && 'bg-destructive/20'
@@ -208,7 +227,7 @@ const WellbeingReportsPage: React.FC = () => {
                         {getTypeIcon(report.incident_type)}
                       </div>
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
                           <h3 className="font-semibold">
                             {child ? `${child.first_name} ${child.last_name}` : 'Unknown'}
                           </h3>
@@ -229,10 +248,23 @@ const WellbeingReportsPage: React.FC = () => {
                         </p>
                         <p className="text-foreground mb-3">{report.description}</p>
                         {report.action_taken && (
-                          <div className="bg-background rounded-lg p-3">
+                          <div className="bg-background rounded-lg p-3 mb-3">
                             <p className="text-sm">
                               <strong>Action taken:</strong> {report.action_taken}
                             </p>
+                          </div>
+                        )}
+
+                        {/* Photo */}
+                        {hasPhoto && (
+                          <div className="mt-4">
+                            <div className="relative rounded-lg overflow-hidden bg-muted">
+                              <img 
+                                src={report.wellbeing_media_url} 
+                                alt="Wellbeing report"
+                                className="w-full max-h-96 object-contain"
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -241,34 +273,49 @@ const WellbeingReportsPage: React.FC = () => {
                     {/* Right: Actions */}
                     <div className="flex flex-col gap-2 lg:w-48">
                       <div className='grid gap-2 grid-cols-2 sm:grid-cols-1'>
-                      {!isAcknowledged ? (
-                        <Button onClick={() => handleAcknowledge(report.id)} className="gap-2">
-                          <CheckCircle className="h-4 w-4" />
-                          Acknowledge
+                        {!isAcknowledged ? (
+                          <Button 
+                            onClick={() => handleAcknowledge(report)} 
+                            className="gap-2"
+                            disabled={updateWellbeingReport.isPending}
+                          >
+                            {updateWellbeingReport.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <CheckCircle className="h-4 w-4" />
+                            )}
+                            Acknowledge
+                          </Button>
+                        ) : (
+                          <Badge className="justify-center py-2 bg-success/60 text-white">
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Acknowledged
+                          </Badge>
+                        )}
+                        <Button 
+                          variant="outline" 
+                          onClick={() => { setSelectedReport(report); setReplyDialogOpen(true); }}
+                          className="gap-2"
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                          Reply
                         </Button>
-                      ) : (
-                        <Badge className="justify-center py-2 bg-success/60 text-white">
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Acknowledged
-                        </Badge>
-                      )}
-                      <Button 
-                        variant="outline" 
-                        onClick={() => { setSelectedReport(report); setReplyDialogOpen(true); }}
-                        className="gap-2"
-                      >
-                        <MessageSquare className="h-4 w-4" />
-                        Reply
-                      </Button>
+                        {hasPhoto && (
+                          <Button
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() => {
+                              const link = document.createElement('a');
+                              link.href = report.wellbeing_media_url!;
+                              link.download = `report-${report.report_date}.jpg`;
+                              link.click();
+                            }}
+                          >
+                            <Download className="h-4 w-4" />
+                            Download
+                          </Button>
+                        )}
                       </div>
-                      {/* <div className="flex gap-2">
-                        <Button variant="outline" size="icon" onClick={() => handleDownload(report)}>
-                          <Download className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="icon" onClick={handlePrint}>
-                          <Printer className="h-4 w-4" />
-                        </Button>
-                      </div> */}
                       <ReporterInfo reporterId={report.created_by} />
                     </div>
                   </div>
@@ -301,9 +348,15 @@ const WellbeingReportsPage: React.FC = () => {
               rows={4}
             />
           </div>
-          <DialogFooter  className='grid grid-cols-2 gap-2'>
+          <DialogFooter className='grid grid-cols-2 gap-2'>
             <Button variant="outline" onClick={() => setReplyDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleReply} disabled={!replyMessage.trim()}>Send Reply</Button>
+            <Button 
+              onClick={handleReply} 
+              disabled={!replyMessage.trim() || sendMessage.isPending}
+            >
+              {sendMessage.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Send Reply
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

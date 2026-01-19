@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -15,9 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useChildren } from '@/hooks/useChildren';
-import { useWellbeingReports, useCreateWellbeingReport } from '@/hooks/useWellbeingReports';
-import { useAddWellbeingMedia } from '@/hooks/useWellbeingMedia';
+import { useTeacherClassrooms } from '@/hooks/useTeacherClassrooms';
+import { useChildrenByClassrooms } from '@/hooks/useChildren';
+import { useWellbeingReports, useCreateWellbeingReport, useUpdateWellbeingReport } from '@/hooks/useWellbeingReports';
+import { useCreateNotification } from '@/hooks/useNotifications';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus,
@@ -25,15 +28,21 @@ import {
   Thermometer,
   Activity,
   HelpCircle,
-  Camera,
   Send,
   Bell,
   Loader2,
+  Edit,
+  Trash2,
+  Download,
+  X,
+  Search,
+  Filter,
 } from 'lucide-react';
 import { cn, getFullName } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { PhotoUpload } from '@/components/ui/photo-upload';
+import { supabase } from '@/integrations/supabase/client';
 
 const incidentTypes = [
   { value: 'injury', label: 'Injury', icon: AlertTriangle, color: 'text-destructive' },
@@ -51,12 +60,20 @@ const severityLevels = [
 const WellbeingReportsPage: React.FC = () => {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { data: children = [], isLoading: childrenLoading } = useChildren();
+  
+  // Get teacher's classrooms and children
+  const { data: teacherAssignments = [] } = useTeacherClassrooms(user?.id);
+  const allClassroomIds = useMemo(() => teacherAssignments.map(a => a.classroom.id), [teacherAssignments]);
+  const { data: children = [], isLoading: childrenLoading } = useChildrenByClassrooms(allClassroomIds);
   const { data: reports = [], isLoading: reportsLoading } = useWellbeingReports();
+  
   const createWellbeingReport = useCreateWellbeingReport();
-  const addWellbeingMedia = useAddWellbeingMedia();
+  const updateWellbeingReport = useUpdateWellbeingReport();
+  const createNotification = useCreateNotification();
   
   const [showForm, setShowForm] = useState(false);
+  const [editingReport, setEditingReport] = useState<any>(null);
+  const [deletingReport, setDeletingReport] = useState<any>(null);
   const [selectedChild, setSelectedChild] = useState('');
   const [incidentType, setIncidentType] = useState('injury');
   const [severity, setSeverity] = useState('low');
@@ -69,49 +86,185 @@ const WellbeingReportsPage: React.FC = () => {
     actionTaken: '',
   });
 
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedChildFilter, setSelectedChildFilter] = useState<string>('all');
+
+  // Filter reports to only show teacher's students
+  const myReports = useMemo(() => {
+    return reports.filter(report => children.some(c => c.id === report.child_id));
+  }, [reports, children]);
+
+  const filteredReports = useMemo(() => {
+    return myReports.filter(report => {
+      const child = children.find(c => c.id === report.child_id);
+      const childName = child ? `${child.first_name} ${child.last_name}`.toLowerCase() : '';
+      const searchLower = searchQuery.toLowerCase();
+      
+      const matchesSearch = !searchQuery || 
+        childName.includes(searchLower) ||
+        report.description?.toLowerCase().includes(searchLower);
+      
+      const matchesChild = selectedChildFilter === 'all' || report.child_id === selectedChildFilter;
+      
+      return matchesSearch && matchesChild;
+    }).sort((a, b) => new Date(b.report_date).getTime() - new Date(a.report_date).getTime());
+  }, [myReports, searchQuery, selectedChildFilter, children]);
+
+  const resetForm = () => {
+    setShowForm(false);
+    setEditingReport(null);
+    setSelectedChild('');
+    setIncidentType('injury');
+    setSeverity('low');
+    setNotifyParent(true);
+    setPhotos([]);
+    setFormData({
+      date: new Date().toISOString().split('T')[0],
+      description: '',
+      actionTaken: '',
+    });
+  };
+
+  const handleEdit = (report: any) => {
+    setEditingReport(report);
+    setSelectedChild(report.child_id);
+    setIncidentType(report.incident_type || 'injury');
+    setSeverity(report.severity || 'low');
+    setNotifyParent(false); // Don't re-notify when editing
+    setFormData({
+      date: report.report_date,
+      description: report.description || '',
+      actionTaken: report.action_taken || '',
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deletingReport) return;
+
+    try {
+      const { error } = await supabase
+        .from('wellbeing_reports')
+        .delete()
+        .eq('id', deletingReport.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Report deleted',
+        description: 'The wellbeing report has been removed.',
+      });
+      setDeletingReport(null);
+      window.location.reload();
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete report.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const notifyParents = async (childId: string, reportDate: string, reportType: string) => {
+    try {
+      const { data: parentLinks, error: parentError } = await supabase
+        .from('child_parent')
+        .select('parent_id')
+        .eq('child_id', childId);
+
+      if (parentError) throw parentError;
+
+      const child = children.find(c => c.id === childId);
+      const childName = child ? `${child.first_name} ${child.last_name}` : 'your child';
+
+      for (const link of parentLinks || []) {
+        await createNotification.mutateAsync({
+          user_id: link.parent_id,
+          title: 'New Wellbeing Report',
+          message: `A ${reportType} report has been filed for ${childName} on ${format(new Date(reportDate), 'MMM d, yyyy')}.`,
+          type: 'warning',
+          link: '/parent/wellbeing-reports',
+        });
+      }
+    } catch (error) {
+      console.error('Error notifying parents:', error);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!selectedChild || !user || !formData.description) return;
     
     setIsSubmitting(true);
     try {
-      // Create report first
-      const report = await createWellbeingReport.mutateAsync({
-        child_id: selectedChild,
-        created_by: user.id,
-        report_date: formData.date,
-        incident_type: incidentType,
-        severity: severity,
-        description: formData.description,
-        action_taken: formData.actionTaken || null,
-        parent_notified: notifyParent,
-      });
+      let photoUrl: string | null = null;
       
-      // Upload photos if any
+      // Upload photo if provided
       if (photos.length > 0) {
-        for (const photo of photos) {
-          await addWellbeingMedia.mutateAsync({
-            wellbeingReportId: report.id,
-            file: photo,
-          });
+        const photo = photos[0];
+        const fileExt = photo.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('activity-photos')
+          .upload(fileName, photo);
+        
+        if (uploadError) throw uploadError;
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from('activity-photos')
+          .getPublicUrl(fileName);
+        
+        photoUrl = publicUrl;
+      }
+
+      if (editingReport) {
+        // Update existing report
+        await updateWellbeingReport.mutateAsync({
+          id: editingReport.id,
+          report_date: formData.date,
+          incident_type: incidentType,
+          severity: severity,
+          description: formData.description,
+          action_taken: formData.actionTaken || null,
+        });
+
+        toast({
+          title: 'Report updated!',
+          description: 'The wellbeing report has been updated.',
+        });
+      } else {
+        // Create new report
+        await createWellbeingReport.mutateAsync({
+          child_id: selectedChild,
+          created_by: user.id,
+          report_date: formData.date,
+          incident_type: incidentType,
+          severity: severity,
+          description: formData.description,
+          action_taken: formData.actionTaken || null,
+          parent_notified: false, // Will be set to true when parent acknowledges
+          wellbeing_media_url: photoUrl,
+        });
+
+        // Notify parents
+        if (notifyParent) {
+          await notifyParents(selectedChild, formData.date, incidentType);
         }
+
+        toast({
+          title: 'Report submitted!',
+          description: notifyParent
+            ? 'Parents have been notified immediately.'
+            : 'Report saved successfully.',
+        });
       }
       
-      toast({
-        title: 'Report submitted!',
-        description: notifyParent
-          ? 'Parents have been notified immediately.'
-          : 'Report saved successfully.',
-      });
-      
-      setShowForm(false);
-      setSelectedChild('');
-      setPhotos([]);
-      setFormData({
-        date: new Date().toISOString().split('T')[0],
-        description: '',
-        actionTaken: '',
-      });
+      resetForm();
+      window.location.reload();
     } catch (error) {
+      console.error('Error saving report:', error);
       toast({
         title: 'Error',
         description: 'Failed to submit report.',
@@ -124,32 +277,86 @@ const WellbeingReportsPage: React.FC = () => {
   return (
     <DashboardLayout>
       <div className='p-4 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
-      <PageHeader
-        title="Wellbeing Reports"
-        description="Document and track incidents, illnesses, and behavioral notes"
-        actions={
-          <Button onClick={() => setShowForm(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            New Report
-          </Button>
-        }
-      />
+        <PageHeader
+          title="Wellbeing Reports"
+          description="Document and track incidents, illnesses, and behavioral notes"
+          actions={
+            <Button onClick={() => setShowForm(true)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              New Report
+            </Button>
+          }
+        />
+
+        {/* Filters */}
+        <Card className="shadow-card mt-6">
+          <CardContent className="p-4">
+            <div className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search by student name or description..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-10"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Filter:</span>
+                </div>
+                
+                <Select value={selectedChildFilter} onValueChange={setSelectedChildFilter}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Select child" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Students</SelectItem>
+                    {children.map(child => (
+                      <SelectItem key={child.id} value={child.id}>
+                        {child.first_name} {child.last_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                Showing {filteredReports.length} {filteredReports.length === 1 ? 'report' : 'reports'}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* New Report Form */}
-      {showForm && (
-        <Card className="mb-6 shadow-card border-warning/30">
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-warning-foreground">
+      {/* New/Edit Report Dialog */}
+      <Dialog open={showForm} onOpenChange={(open) => !open && resetForm()}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-warning-foreground">
               <AlertTriangle className="h-5 w-5" />
-              New Wellbeing Report
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
+              {editingReport ? 'Edit Wellbeing Report' : 'New Wellbeing Report'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingReport ? 'Update the report details below' : 'Document an incident, illness, or behavioral note'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
             {/* Child Selection */}
             <div className="space-y-2">
               <Label>Select Student</Label>
-              <Select value={selectedChild} onValueChange={setSelectedChild}>
+              <Select value={selectedChild} onValueChange={setSelectedChild} disabled={!!editingReport}>
                 <SelectTrigger className="h-12">
                   <SelectValue placeholder="Choose a student" />
                 </SelectTrigger>
@@ -175,7 +382,7 @@ const WellbeingReportsPage: React.FC = () => {
                         type="button"
                         onClick={() => setIncidentType(type.value)}
                         className={cn(
-                          'flex items-center gap-2 px-4 py-2 rounded-xl transition-all btn-bounce border',
+                          'flex items-center gap-2 px-4 py-2 rounded-xl transition-all border',
                           incidentType === type.value
                             ? 'border-primary bg-primary/5'
                             : 'border-border hover:border-primary/50'
@@ -194,9 +401,7 @@ const WellbeingReportsPage: React.FC = () => {
                   <Input
                     type="date"
                     value={formData.date}
-                    onChange={e =>
-                      setFormData({ ...formData, date: e.target.value })
-                    }
+                    onChange={e => setFormData({ ...formData, date: e.target.value })}
                     className="h-12"
                   />
                 </div>
@@ -207,11 +412,8 @@ const WellbeingReportsPage: React.FC = () => {
                   <Textarea
                     placeholder="Describe what happened in detail..."
                     value={formData.description}
-                    onChange={e =>
-                      setFormData({ ...formData, description: e.target.value })
-                    }
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
                     rows={4}
-                    className="resize-none"
                     required
                   />
                 </div>
@@ -226,7 +428,7 @@ const WellbeingReportsPage: React.FC = () => {
                         type="button"
                         onClick={() => setSeverity(level.value)}
                         className={cn(
-                          'flex-1 py-3 rounded-xl transition-all btn-bounce font-medium',
+                          'flex-1 py-3 rounded-xl transition-all font-medium',
                           severity === level.value
                             ? `${level.color} text-white shadow-lg`
                             : 'bg-muted hover:bg-muted/80'
@@ -242,148 +444,201 @@ const WellbeingReportsPage: React.FC = () => {
                 <div className="space-y-2">
                   <Label>Action Taken</Label>
                   <Textarea
-                    placeholder="Describe the actions taken to address the situation..."
+                    placeholder="Describe the actions taken..."
                     value={formData.actionTaken}
-                    onChange={e =>
-                      setFormData({ ...formData, actionTaken: e.target.value })
-                    }
+                    onChange={e => setFormData({ ...formData, actionTaken: e.target.value })}
                     rows={3}
-                    className="resize-none"
                   />
                 </div>
 
-                {/* Photo Upload */}
-                <div className="space-y-2">
-                  <Label>Photos (Optional)</Label>
-                  <PhotoUpload
-                    maxFiles={5}
-                    maxSizeMB={10}
-                    onPhotosChange={setPhotos}
-                  />
-                </div>
-
-                {/* Notify Parent */}
-                <div className="flex items-center gap-3 p-4 bg-warning/10 rounded-xl">
-                  <Checkbox
-                    id="notifyParent"
-                    checked={notifyParent}
-                    onCheckedChange={(checked) => setNotifyParent(checked as boolean)}
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="notifyParent" className="cursor-pointer font-medium">
-                      Notify parent immediately
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      Send an instant notification to the parent about this incident
-                    </p>
+                {/* Photo Upload - Only for new reports */}
+                {!editingReport && (
+                  <div className="space-y-2">
+                    <Label>Photo (Optional)</Label>
+                    <PhotoUpload maxFiles={1} maxSizeMB={10} onPhotosChange={setPhotos} />
                   </div>
-                  <Bell className="h-5 w-5 text-warning" />
-                </div>
+                )}
 
-                {/* Actions */}
-                <div className="flex gap-3 pt-4 border-t">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowForm(false)}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={handleSubmit} 
-                    className="flex-1 gap-2"
-                    disabled={isSubmitting || !formData.description}
-                  >
-                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    Submit Report
-                  </Button>
-                </div>
+                {/* Notify Parent - Only for new reports */}
+                {!editingReport && (
+                  <div className="flex items-center gap-3 p-4 bg-warning/10 rounded-xl">
+                    <Checkbox
+                      id="notifyParent"
+                      checked={notifyParent}
+                      onCheckedChange={(checked) => setNotifyParent(checked as boolean)}
+                    />
+                    <div className="flex-1">
+                      <Label htmlFor="notifyParent" className="cursor-pointer font-medium">
+                        Notify parent immediately
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Send an instant notification to the parent
+                      </p>
+                    </div>
+                    <Bell className="h-5 w-5 text-warning" />
+                  </div>
+                )}
               </>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
 
-      {/* Past Reports */}
-      <Card className="shadow-card">
-        <CardHeader>
-          <CardTitle>Recent Reports</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {reportsLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : reports.length > 0 ? (
-            <div className="space-y-4">
-              {reports.map(report => {
-                const child = children.find(c => c.id === report.child_id);
-                const typeInfo = incidentTypes.find(t => t.value === report.incident_type);
+          <DialogFooter>
+            <Button variant="outline" onClick={resetForm}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSubmit} 
+              disabled={isSubmitting || !formData.description}
+            >
+              {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+              {editingReport ? 'Update Report' : 'Submit Report'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-                return (
-                  <div
-                    key={report.id}
-                    className={cn(
-                      'p-4 rounded-xl border',
-                      report.severity === 'high'
-                        ? 'bg-destructive/5 border-destructive/20'
-                        : report.severity === 'medium'
-                        ? 'bg-warning/5 border-warning/20'
-                        : 'bg-muted/50'
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          {typeInfo && (
-                            <typeInfo.icon className={cn('h-4 w-4', typeInfo.color)} />
+      {/* Reports List */}
+      <div className="space-y-4">
+        {reportsLoading ? (
+          <Card className="shadow-card">
+            <CardContent className="p-12 text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+              <p className="text-muted-foreground">Loading reports...</p>
+            </CardContent>
+          </Card>
+        ) : filteredReports.length === 0 ? (
+          <Card className="shadow-card">
+            <CardContent className="p-12 text-center">
+              <p className="text-muted-foreground">No reports found</p>
+            </CardContent>
+          </Card>
+        ) : (
+          filteredReports.map(report => {
+            const child = children.find(c => c.id === report.child_id);
+            const typeInfo = incidentTypes.find(t => t.value === report.incident_type);
+            const hasPhoto = report.wellbeing_media_url && report.wellbeing_media_url.trim().length > 0;
+
+            return (
+              <Card
+                key={report.id}
+                className={cn(
+                  'shadow-card',
+                  report.severity === 'high'
+                    ? 'bg-destructive/5 border-destructive/20'
+                    : report.severity === 'medium'
+                    ? 'bg-warning/5 border-warning/20'
+                    : 'bg-muted/50'
+                )}
+              >
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        {typeInfo && <typeInfo.icon className={cn('h-4 w-4', typeInfo.color)} />}
+                        <span className="font-semibold">
+                          {child ? getFullName(child.first_name, child.last_name) : 'Unknown'}
+                        </span>
+                        <Badge
+                          className={cn(
+                            report.severity === 'high'
+                              ? 'bg-destructive'
+                              : report.severity === 'medium'
+                              ? 'bg-warning'
+                              : 'bg-success'
                           )}
-                          <span className="font-semibold">
-                            {child ? getFullName(child.first_name, child.last_name) : 'Unknown'}
-                          </span>
-                          <Badge
-                            className={cn(
-                              report.severity === 'high'
-                                ? 'bg-destructive text-destructive-foreground'
-                                : report.severity === 'medium'
-                                ? 'bg-warning text-warning-foreground'
-                                : 'bg-success text-success-foreground'
-                            )}
-                          >
-                            {report.severity}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-foreground mb-2">{report.description}</p>
-                        {report.action_taken && (
-                          <p className="text-sm text-muted-foreground">
+                        >
+                          {report.severity}
+                        </Badge>
+                        <Badge variant="outline" className="capitalize">
+                          {report.incident_type}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        {format(new Date(report.report_date), 'EEEE, MMMM d, yyyy')}
+                      </p>
+                      <p className="text-foreground mb-2">{report.description}</p>
+                      {report.action_taken && (
+                        <div className="bg-background rounded-lg p-3 mb-3">
+                          <p className="text-sm">
                             <strong>Action taken:</strong> {report.action_taken}
                           </p>
-                        )}
-                      </div>
-                      <div className="text-right text-sm text-muted-foreground">
-                        <p>{format(new Date(report.report_date), 'MMM d, yyyy')}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
-                      <span className="text-xs text-muted-foreground">
-                        Reported on {format(new Date(report.created_at || ''), 'MMM d, h:mm a')}
-                      </span>
-                      {report.parent_notified && (
-                        <span className="text-xs text-success flex items-center gap-1">
-                          <Bell className="h-3 w-3" />
-                          Parent notified
-                        </span>
+                        </div>
+                      )}
+
+                      {/* Photo */}
+                      {hasPhoto && (
+                        <div className="mt-4">
+                          <div className="relative rounded-lg overflow-hidden bg-muted">
+                            <img 
+                              src={report.wellbeing_media_url} 
+                              alt="Wellbeing report"
+                              className="w-full max-h-96 object-contain"
+                            />
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-center text-muted-foreground py-8">No reports yet</p>
-          )}
-        </CardContent>
-      </Card>
+
+                  <div className="flex items-center justify-between pt-4 border-t">
+                    <div className="flex items-center gap-2">
+                      {report.parent_notified && (
+                        <Badge className="bg-success/60">
+                          <Bell className="h-3 w-3 mr-1" />
+                          Parent acknowledged
+                        </Badge>
+                      )}
+                      {hasPhoto && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = report.wellbeing_media_url!;
+                            link.download = `report-${report.report_date}.jpg`;
+                            link.click();
+                          }}
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          Download
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(report)}>
+                        <Edit className="h-4 w-4 mr-1" />
+                        Edit
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setDeletingReport(report)}>
+                        <Trash2 className="h-4 w-4 mr-1 text-destructive" />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
+      </div>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deletingReport} onOpenChange={(open) => !open && setDeletingReport(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Wellbeing Report?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this report. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };

@@ -1,49 +1,93 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
-import { AnnouncementCard } from '@/components/ui/announcement-card';
 import { ChildCard } from '@/components/ui/child-card';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTeacherClassroom } from '@/hooks/useClassrooms';
-import { useChildren } from '@/hooks/useChildren';
+import { useTeacherClassrooms } from '@/hooks/useTeacherClassrooms';
+import { useChildrenByClassrooms } from '@/hooks/useChildren';
 import { useActivityLogs } from '@/hooks/useActivityLogs';
+import { useMealLogs } from '@/hooks/useMealLogs';
+import { useWellbeingReports } from '@/hooks/useWellbeingReports';
+import { useMessages } from '@/hooks/useMessages';
 import { useAnnouncements } from '@/hooks/useAnnouncements';
 import {
   Users,
-  UserCheck,
-  UserX,
   ClipboardList,
   MessageSquare,
   Bell,
   ChevronRight,
   Calendar,
+  Utensils,
+  AlertTriangle,
+  User,
 } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 
 const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
   
-  // Get teacher's classroom
-  const { data: teacherClassroom, isLoading: classroomLoading } = useTeacherClassroom(user?.id);
-  const { data: classroomChildren = [], isLoading: childrenLoading } = useChildren(teacherClassroom?.id);
+  // Get all teacher's classrooms (both primary and co-teacher)
+  const { data: teacherAssignments = [], isLoading: classroomsLoading } = useTeacherClassrooms(user?.id);
+  
+  // Extract all classroom IDs
+  const allClassroomIds = useMemo(() => 
+    teacherAssignments.map(assignment => assignment.classroom.id),
+    [teacherAssignments]
+  );
+  
+  // Get all children from all assigned classrooms
+  const { data: allChildren = [], isLoading: childrenLoading } = useChildrenByClassrooms(allClassroomIds);
+  
+  // Get all child IDs
+  const allChildIds = useMemo(() => allChildren.map(child => child.id), [allChildren]);
   
   // Get today's activity logs
   const today = new Date().toISOString().split('T')[0];
   const { data: todaysLogs = [] } = useActivityLogs(undefined, today);
   
-  // Get announcements
-  const { data: announcements = [] } = useAnnouncements(teacherClassroom?.id);
-  const recentAnnouncements = announcements.slice(0, 2);
-  
-  // Calculate stats
-  const totalStudents = classroomChildren.length;
-  const loggedToday = todaysLogs.filter(log => 
-    classroomChildren.some(child => child.id === log.child_id)
+  // Get today's meal logs
+  const { data: allMealLogs = [] } = useMealLogs(undefined, today, today);
+  const todaysMealLogs = useMemo(() => 
+    allMealLogs.filter(log => allChildIds.includes(log.child_id)),
+    [allMealLogs, allChildIds]
   );
+  
+  // Get wellbeing reports
+  const { data: allWellbeingReports = [] } = useWellbeingReports();
+  const pendingWellbeingReports = useMemo(() => 
+    allWellbeingReports.filter(report => 
+      allChildIds.includes(report.child_id) && !report.parent_notified
+    ),
+    [allWellbeingReports, allChildIds]
+  );
+  
+  // Get messages for the teacher
+  const { data: allMessages = [] } = useMessages(user?.id);
+  const recentMessages = useMemo(() => 
+    allMessages.filter(msg => msg.recipient_id === user?.id).slice(0, 3),
+    [allMessages, user?.id]
+  );
+  
+  // Get announcements
+  const { data: announcements = [] } = useAnnouncements();
+  
+  // Calculate stats across all classrooms
+  const totalStudents = allChildren.length;
+  const loggedToday = todaysLogs.filter(log => 
+    allChildren.some(child => child.id === log.child_id)
+  );
+  
+  // Count unique children with meal logs today
+  const childrenWithMeals = useMemo(() => {
+    const uniqueChildIds = new Set(todaysMealLogs.map(log => log.child_id));
+    return uniqueChildIds.size;
+  }, [todaysMealLogs]);
   
   const quickActions = [
     { label: 'Log Activity', href: '/teacher/activity-logs', icon: ClipboardList, color: 'bg-primary' },
@@ -51,14 +95,14 @@ const TeacherDashboard: React.FC = () => {
     { label: 'Announcement', href: '/teacher/announcements', icon: Bell, color: 'bg-success' },
   ];
 
-  const isLoading = classroomLoading || childrenLoading;
+  const isLoading = classroomsLoading || childrenLoading;
 
   return (
     <DashboardLayout>
       <div className='px-4 py-2 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
         <PageHeader
           title={`Good morning, ${user?.full_name?.split(' ')[0]}!`}
-          description="Here's what's happening in your classroom today"
+          description={`Managing ${teacherAssignments.length} classroom${teacherAssignments.length !== 1 ? 's' : ''} with ${totalStudents} total students`}
         />
       </div>
 
@@ -67,22 +111,22 @@ const TeacherDashboard: React.FC = () => {
         <StatCard
           title="Total Students"
           value={isLoading ? '-' : totalStudents}
-          subtitle={teacherClassroom?.name || 'No classroom'}
+          subtitle={`Across ${teacherAssignments.length} classroom${teacherAssignments.length !== 1 ? 's' : ''}`}
           icon={Users}
           variant="primary"
         />
         <StatCard
-          title="Present Today"
-          value={isLoading ? '-' : totalStudents}
-          subtitle="Checked in"
-          icon={UserCheck}
+          title="Meal Logs Today"
+          value={isLoading ? '-' : `${childrenWithMeals}/${totalStudents}`}
+          subtitle="Children fed"
+          icon={Utensils}
           variant="success"
         />
         <StatCard
-          title="Absent"
-          value={0}
-          subtitle="Not checked in"
-          icon={UserX}
+          title="Pending Reports"
+          value={pendingWellbeingReports.length}
+          subtitle="Needs parent notification"
+          icon={AlertTriangle}
           variant="warning"
         />
         <StatCard
@@ -110,10 +154,10 @@ const TeacherDashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* My Classroom */}
+        {/* All My Students */}
         <Card className="lg:col-span-2 shadow-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-lg font-semibold">My Classroom</CardTitle>
+            <CardTitle className="text-lg font-semibold">All My Students</CardTitle>
             <Link to="/teacher/classroom">
               <Button variant="ghost" size="sm">
                 View All
@@ -128,11 +172,11 @@ const TeacherDashboard: React.FC = () => {
                   <Skeleton key={i} className="h-32 rounded-xl" />
                 ))}
               </div>
-            ) : classroomChildren.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No students in your classroom yet.</p>
+            ) : allChildren.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">No students in your classrooms yet.</p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {classroomChildren.slice(0, 4).map(child => (
+                {allChildren.slice(0, 4).map(child => (
                   <ChildCard
                     key={child.id}
                     child={{
@@ -192,11 +236,14 @@ const TeacherDashboard: React.FC = () => {
         </Card>
       </div>
 
-      {/* Recent Announcements */}
+      {/* Recent Messages */}
       <Card className="mt-6 shadow-card">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-lg font-semibold">Recent Announcements</CardTitle>
-          <Link to="/teacher/announcements">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-primary" />
+            Recent Messages
+          </CardTitle>
+          <Link to="/teacher/messages">
             <Button variant="ghost" size="sm">
               View All
               <ChevronRight className="h-4 w-4 ml-1" />
@@ -204,24 +251,39 @@ const TeacherDashboard: React.FC = () => {
           </Link>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {recentAnnouncements.length > 0 ? (
-              recentAnnouncements.map(announcement => (
-                <AnnouncementCard key={announcement.id} announcement={{
-                  id: announcement.id,
-                  title: announcement.title,
-                  content: announcement.content,
-                  authorId: announcement.created_by,
-                  targetAudience: 'everyone',
-                  priority: (announcement.priority as 'low' | 'normal' | 'high') || 'normal',
-                  isPinned: announcement.is_pinned || false,
-                  createdAt: announcement.created_at || '',
-                  readBy: [],
-                  eventDate: announcement.event_date || undefined,
-                }} />
+          <div className="space-y-3">
+            {recentMessages.length > 0 ? (
+              recentMessages.map(message => (
+                <Link 
+                  key={message.id} 
+                  to="/teacher/messages"
+                  className="block p-4 bg-muted/50 rounded-lg hover:bg-muted transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <User className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <p className="font-medium text-sm">From Parent</p>
+                        <div className="flex items-center gap-2">
+                          {!message.is_read && (
+                            <Badge variant="default" className="text-xs">New</Badge>
+                          )}
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {message.content}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
               ))
             ) : (
-              <p className="text-muted-foreground text-center py-4">No announcements yet</p>
+              <p className="text-muted-foreground text-center py-8">No messages yet</p>
             )}
           </div>
         </CardContent>

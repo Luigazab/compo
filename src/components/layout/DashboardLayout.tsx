@@ -176,8 +176,11 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                 <School className="h-7 w-7 text-primary-foreground" />
               </div>
               <div>
-                <img className="text-foreground" src="/logo.PNG" alt="ComPo" width="60%" height="auto" />
+                <img className="text-foreground" src="/logo.PNG" alt="ComPo" width="90%" height="auto" />
                 <p className="text-sm text-muted-foreground">Daycare Portal</p>
+              </div>
+              <div>
+                <NotificationBell/>
               </div>
             </div>
             <button
