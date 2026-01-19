@@ -24,33 +24,30 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTeacherClassrooms } from '@/hooks/useTeacherClassrooms';
+import { useTeacherClassrooms, TeacherClassroomAssignment } from '@/hooks/useTeacherClassrooms';
 import { useChildrenByClassrooms } from '@/hooks/useChildren';
 import { useActivityLogs } from '@/hooks/useActivityLogs';
-import { Search, Filter, Users, GraduationCap, ArrowLeft, Baby, Calendar, AlertCircle, Eye } from 'lucide-react';
+import { Search, Filter, Users, GraduationCap, ArrowLeft, Baby, Calendar, AlertCircle, Eye, Crown, UserCheck } from 'lucide-react';
 import { format } from 'date-fns';
+import { Tables } from '@/integrations/supabase/types';
 
-interface Classroom {
-  id: string;
-  name: string;
-  age_group: string | null;
-  capacity: number | null;
-}
+type Classroom = Tables<'classrooms'>;
+type Child = Tables<'children'>;
 
-const MyClassroomPage: React.FC = () => {
+export default function MyClassroomPage() {
   const { user } = useAuth();
+  const [selectedAssignment, setSelectedAssignment] = useState<TeacherClassroomAssignment | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [selectedClassroom, setSelectedClassroom] = useState<Classroom | null>(null);
   const [activeTab, setActiveTab] = useState<string>('all');
-  
-  // Get teacher's classrooms
-  const { data: teacherClassrooms = [], isLoading: classroomsLoading } = useTeacherClassrooms(user?.id);
+
+  // Get teacher's classrooms (both primary and co-teacher)
+  const { data: teacherAssignments = [], isLoading: classroomsLoading } = useTeacherClassrooms(user?.id);
   
   // Extract classroom data
   const classrooms: Classroom[] = useMemo(() => 
-    teacherClassrooms.map((tc: any) => tc.classrooms).filter(Boolean),
-    [teacherClassrooms]
+    teacherAssignments.map((ta) => ta.classroom).filter(Boolean),
+    [teacherAssignments]
   );
   
   // Get all classroom IDs for fetching children
@@ -62,6 +59,9 @@ const MyClassroomPage: React.FC = () => {
   // Get today's logs
   const today = new Date().toISOString().split('T')[0];
   const { data: todaysLogs = [] } = useActivityLogs(undefined, today);
+  
+  // Get selected classroom from assignment
+  const selectedClassroom = selectedAssignment?.classroom || null;
   
   // Filter children based on selected classroom and active tab
   const getFilteredChildrenByTab = useMemo(() => {
@@ -77,18 +77,18 @@ const MyClassroomPage: React.FC = () => {
   // Apply search and status filters
   const filteredChildren = useMemo(() => {
     return getFilteredChildrenByTab.filter(child => {
-    const fullName = `${child.first_name} ${child.last_name}`.toLowerCase();
-    const matchesSearch = fullName.includes(searchQuery.toLowerCase());
-    
-    if (statusFilter === 'all') return matchesSearch;
-    
-    const hasLog = todaysLogs.some(log => log.child_id === child.id);
-    
-    if (statusFilter === 'logged') return matchesSearch && hasLog;
-    if (statusFilter === 'pending') return matchesSearch && !hasLog;
-    
-    return matchesSearch;
-  });
+      const fullName = `${child.first_name} ${child.last_name}`.toLowerCase();
+      const matchesSearch = fullName.includes(searchQuery.toLowerCase());
+      
+      if (statusFilter === 'all') return matchesSearch;
+      
+      const hasLog = todaysLogs.some(log => log.child_id === child.id);
+      
+      if (statusFilter === 'logged') return matchesSearch && hasLog;
+      if (statusFilter === 'pending') return matchesSearch && !hasLog;
+      
+      return matchesSearch;
+    });
   }, [getFilteredChildrenByTab, searchQuery, statusFilter, todaysLogs]);
 
   const isLoading = classroomsLoading || childrenLoading;
@@ -104,8 +104,13 @@ const MyClassroomPage: React.FC = () => {
     return age;
   };
 
+  // Helper to get assignment for a classroom
+  const getAssignmentForClassroom = (classroomId: string) => {
+    return teacherAssignments.find(ta => ta.classroom.id === classroomId);
+  };
+
   // Classroom Selection View
-  if (!selectedClassroom) {
+  if (!selectedAssignment) {
     return (
       <DashboardLayout>
         <div className='p-4 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
@@ -133,7 +138,8 @@ const MyClassroomPage: React.FC = () => {
           </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {classrooms.map((classroom) => {
+            {teacherAssignments.map((assignment) => {
+              const classroom = assignment.classroom;
               const studentCount = allChildren.filter(c => c.classroom_id === classroom.id).length;
               
               return (
@@ -141,7 +147,7 @@ const MyClassroomPage: React.FC = () => {
                   key={classroom.id}
                   className="hover:shadow-lg transition-all cursor-pointer group hover:border-primary/50"
                   onClick={() => {
-                    setSelectedClassroom(classroom);
+                    setSelectedAssignment(assignment);
                     setActiveTab('all');
                   }}
                 >
@@ -150,9 +156,28 @@ const MyClassroomPage: React.FC = () => {
                       <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
                         <GraduationCap className="h-6 w-6 text-primary" />
                       </div>
-                      <Badge variant="secondary">{classroom.age_group || 'All ages'}</Badge>
+                      <div className="flex items-center gap-2">
+                        {/* Role Badge */}
+                        <Badge 
+                          variant={assignment.role === 'primary' ? 'default' : 'secondary'}
+                          className="gap-1"
+                        >
+                          {assignment.role === 'primary' ? (
+                            <>
+                              <Crown className="h-3 w-3" />
+                              Primary
+                            </>
+                          ) : (
+                            <>
+                              <UserCheck className="h-3 w-3" />
+                              Co-Teacher
+                            </>
+                          )}
+                        </Badge>
+                      </div>
                     </div>
                     <CardTitle className="mt-3 text-lg">{classroom.name}</CardTitle>
+                    <Badge variant="outline" className="w-fit mt-1">{classroom.age_group || 'All ages'}</Badge>
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -184,20 +209,38 @@ const MyClassroomPage: React.FC = () => {
   return (
     <DashboardLayout>
       <div className='p-4 md:p-0 bg-[#97CFCA] md:bg-transparent rounded-lg mb-6 shadow-lg md:shadow-none'>
-        <PageHeader
-          title={selectedClassroom.name}
-          description={`${selectedClassroom.age_group || 'All ages'} • ${filteredChildren.length} students`}
-          actions={
-            <Button 
-              variant="outline" 
-              onClick={() => setSelectedClassroom(null)}
-              className="gap-2"
+        <div className="flex flex-col gap-2 mb-4">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold">{selectedClassroom?.name}</h1>
+            <Badge 
+              variant={selectedAssignment.role === 'primary' ? 'default' : 'secondary'}
+              className="gap-1"
             >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Classrooms
-            </Button>
-          }
-        />
+              {selectedAssignment.role === 'primary' ? (
+                <>
+                  <Crown className="h-3 w-3" />
+                  Primary Teacher
+                </>
+              ) : (
+                <>
+                  <UserCheck className="h-3 w-3" />
+                  Co-Teacher
+                </>
+              )}
+            </Badge>
+          </div>
+          <p className="text-muted-foreground">{selectedClassroom?.age_group || 'All ages'} • {filteredChildren.length} students</p>
+        </div>
+        <div className="flex justify-end">
+          <Button 
+            variant="outline" 
+            onClick={() => setSelectedAssignment(null)}
+            className="gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Classrooms
+          </Button>
+        </div>
       </div>
 
       {/* Tabs for classroom selection */}
@@ -207,15 +250,16 @@ const MyClassroomPage: React.FC = () => {
             <Users className="h-4 w-4" />
             All Students
           </TabsTrigger>
-          {classrooms.map((classroom) => (
+          {teacherAssignments.map((assignment) => (
             <TabsTrigger 
-              key={classroom.id} 
-              value={classroom.id}
+              key={assignment.classroom.id} 
+              value={assignment.classroom.id}
               className="gap-2"
-              onClick={() => setSelectedClassroom(classroom)}
+              onClick={() => setSelectedAssignment(assignment)}
             >
               <GraduationCap className="h-4 w-4" />
-              {classroom.name}
+              {assignment.classroom.name}
+              {assignment.role === 'primary' && <Crown className="h-3 w-3 ml-1" />}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -337,6 +381,4 @@ const MyClassroomPage: React.FC = () => {
       </Card>
     </DashboardLayout>
   );
-};
-
-export default MyClassroomPage;
+}
