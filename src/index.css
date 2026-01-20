@@ -1,0 +1,302 @@
+@import "@fontsource/nunito/400.css";
+@import "@fontsource/nunito/500.css";
+@import "@fontsource/nunito/600.css";
+@import "@fontsource/nunito/700.css";
+@import "@fontsource/nunito/800.css";
+@import url("https://fonts.googleapis.com/css2?family=Montserrat&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Nunito&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* LittleSteps Daycare Portal Design System */
+
+@layer base {
+  :root {
+    /* Core backgrounds */
+    --background: 210 40% 98.0392%;
+    --foreground: 215 25% 26.6667%;
+
+    /* Cards and elevated surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 20%;
+
+    /* Popover */
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 20%;
+
+    /* Primary - Warm Teal */
+    --primary: 174 58% 55%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 174 58% 48%;
+
+    /* Secondary - Soft lavender */
+    --secondary: 250 50% 95%;
+    --secondary-foreground: 250 30% 40%;
+
+    /* Accent - Warm Coral */
+    --accent: 0 85% 70%;
+    --accent-foreground: 0 0% 100%;
+    --accent-hover: 0 85% 62%;
+
+    /* Muted */
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 10% 50%;
+
+    /* Success - Soft Green */
+    --success: 152 60% 50%;
+    --success-foreground: 0 0% 100%;
+    --success-light: 152 60% 95%;
+
+    /* Warning - Warm Amber */
+    --warning: 38 95% 55%;
+    --warning-foreground: 38 95% 20%;
+    --warning-light: 38 95% 92%;
+
+    /* Destructive */
+    --destructive: 0 75% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-light: 0 75% 95%;
+
+    /* Info - Soft Blue */
+    --info: 210 80% 60%;
+    --info-foreground: 0 0% 100%;
+    --info-light: 210 80% 95%;
+
+    /* UI Elements */
+    --border: 220 20% 90%;
+    --input: 220 20% 90%;
+    --ring: 174 58% 55%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 25% 35%;
+    --sidebar-primary: 174 58% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 174 58% 95%;
+    --sidebar-accent-foreground: 174 58% 35%;
+    --sidebar-border: 220 20% 92%;
+    --sidebar-ring: 174 58% 55%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(174 58% 55%) 0%, hsl(180 60% 45%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(0 85% 70%) 0%, hsl(15 85% 65%) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(40 90% 65%) 0%, hsl(0 85% 70%) 100%);
+    --gradient-calm: linear-gradient(135deg, hsl(174 58% 55%) 0%, hsl(210 80% 60%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(40 33% 98%) 0%, hsl(174 30% 95%) 100%);
+
+    /* Shadows */
+    --shadow-sm: 0px 1px 8.25px -4px hsla(229, 84%, 5%, 0.81);
+    --shadow-md: 0px 1px 24.75px -4px hsla(229, 84%, 5%, 0.81);
+    --shadow-lg: 0px 1px 41.25px -4px hsla(229, 84%, 5%, 0.81);
+    --shadow-xl: 0 20px 25px -5px hsl(220 25% 20% / 0.1), 0 8px 10px -6px hsl(220 25% 20% / 0.05);
+    --shadow-glow: 0 0 20px hsl(174 58% 55% / 0.3);
+    --shadow-card: 0 2px 8px -2px hsl(220 25% 20% / 0.08), 0 4px 12px -4px hsl(220 25% 20% / 0.05);
+
+    /* Role-based colors */
+    --role-admin: 280 65% 55%;
+    --role-admin-light: 280 65% 95%;
+    --role-teacher: 174 58% 55%;
+    --role-teacher-light: 174 58% 95%;
+    --role-parent: 38 95% 55%;
+    --role-parent-light: 38 95% 92%;
+
+    /* Mood colors */
+    --mood-happy: 45 95% 55%;
+    --mood-sad: 210 60% 55%;
+    --mood-energetic: 0 85% 65%;
+    --mood-tired: 220 15% 60%;
+    --mood-calm: 174 58% 55%;
+    --font-sans: Montserrat, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+    --shadow: 0px 1px 16.5px -4px hsla(229, 84%, 5%, 0.81);
+  }
+
+  .dark {
+    --background: 220 25% 10%;
+    --foreground: 40 20% 95%;
+
+    --card: 220 25% 14%;
+    --card-foreground: 40 20% 95%;
+
+    --popover: 220 25% 14%;
+    --popover-foreground: 40 20% 95%;
+
+    --primary: 174 58% 55%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 174 58% 60%;
+
+    --secondary: 220 25% 20%;
+    --secondary-foreground: 40 20% 90%;
+
+    --accent: 0 85% 65%;
+    --accent-foreground: 0 0% 100%;
+
+    --muted: 220 25% 18%;
+    --muted-foreground: 220 15% 60%;
+
+    --success: 152 60% 45%;
+    --success-foreground: 0 0% 100%;
+    --success-light: 152 60% 15%;
+
+    --warning: 38 95% 50%;
+    --warning-foreground: 38 95% 95%;
+    --warning-light: 38 95% 15%;
+
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-light: 0 75% 15%;
+
+    --info: 210 80% 55%;
+    --info-foreground: 0 0% 100%;
+    --info-light: 210 80% 15%;
+
+    --border: 220 25% 20%;
+    --input: 220 25% 20%;
+    --ring: 174 58% 55%;
+
+    --sidebar-background: 220 25% 12%;
+    --sidebar-foreground: 40 20% 85%;
+    --sidebar-primary: 174 58% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 174 58% 20%;
+    --sidebar-accent-foreground: 174 58% 85%;
+    --sidebar-border: 220 25% 18%;
+    --sidebar-ring: 174 58% 55%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(174 58% 45%) 0%, hsl(180 60% 35%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(220 25% 10%) 0%, hsl(220 25% 14%) 100%);
+
+    --shadow-sm: 0px 1px 8.25px -4px hsla(229, 84%, 5%, 0.81);
+    --shadow-md: 0px 1px 24.75px -4px hsla(229, 84%, 5%, 0.81);
+    --shadow-lg: 0px 1px 41.25px -4px hsla(229, 84%, 5%, 0.81);
+    --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.5);
+    --shadow-card: 0 2px 8px -2px hsl(0 0% 0% / 0.4);
+    --font-sans: Montserrat, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+    --shadow: 0px 1px 16.5px -4px hsla(229, 84%, 5%, 0.81);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-family: "Nunito", system-ui, sans-serif;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer components {
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5;
+  }
+
+  .btn-bounce {
+    @apply transition-transform active:scale-95;
+  }
+
+  .glass {
+    @apply bg-card/80 backdrop-blur-md;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-primary);
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .status-success {
+    @apply bg-success-light text-success;
+  }
+
+  .status-warning {
+    @apply bg-warning-light text-warning-foreground;
+  }
+
+  .status-error {
+    @apply bg-destructive-light text-destructive;
+  }
+
+  .status-info {
+    @apply bg-info-light text-info;
+  }
+
+  .role-admin {
+    @apply bg-[hsl(var(--role-admin-light))] text-[hsl(var(--role-admin))];
+  }
+
+  .role-teacher {
+    @apply bg-[hsl(var(--role-teacher-light))] text-[hsl(var(--role-teacher))];
+  }
+
+  .role-parent {
+    @apply bg-[hsl(var(--role-parent-light))] text-[hsl(var(--role-parent))];
+  }
+
+  .input-focus {
+    @apply focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all;
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-200;
+  }
+
+  .sidebar-item-active {
+    @apply bg-sidebar-accent text-sidebar-primary font-semibold;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.3s ease-out;
+  }
+
+  .animate-bounce-gentle {
+    animation: bounceGentle 2s ease-in-out infinite;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes bounceGentle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+}
